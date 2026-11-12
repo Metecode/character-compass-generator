@@ -55,7 +55,7 @@ export function sanitizeCompass(v: unknown): Compass {
   const bands = DEFAULT_BAND_COLORS.map((c, i) => sanitizeRegion(rb[i], c)) as Bands
   return {
     id: str(v.id) || newId(),
-    title: truncate(str(v.title), TITLE_MAX) || 'Karakter Pusulası',
+    title: truncate(str(v.title), TITLE_MAX) || 'Character Compass',
     gridSize,
     quadrants,
     bands,

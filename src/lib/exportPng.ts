@@ -158,7 +158,7 @@ export function fileNameFor(title: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 60)
-  return `${slug || 'karakter-pusulasi'}.png`
+  return `${slug || 'character-compass'}.png`
 }
 
 export function downloadBlob(blob: Blob, fileName: string): void {

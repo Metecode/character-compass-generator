@@ -67,7 +67,7 @@ export function createDefaultBands(): Bands {
 export function createDefaultCompass(gridSize: GridSize = DEFAULT_GRID_SIZE): Compass {
   return {
     id: newId(),
-    title: 'Karakter Pusulası',
+    title: 'Character Compass',
     gridSize,
     quadrants: createDefaultQuadrants(),
     bands: createDefaultBands(),

@@ -142,7 +142,7 @@ export const CompassArt = forwardRef<HTMLDivElement, Props>(function CompassArt(
       {grid}
       {/* İmza şeridi: hücrelerin üstüne binmez, ızgaranın altında yer alır. */}
       <div
-        className="flex shrink-0 items-center justify-end px-2 text-[17px] leading-none font-bold tracking-wide text-paper/55"
+        className="flex shrink-0 items-center justify-end px-3 text-[26px] leading-none font-bold tracking-wide whitespace-nowrap text-paper/75"
         style={{ height: SIGNATURE_BAND - LINE_THICK }}
       >
         {SITE_URL}
