@@ -6,6 +6,7 @@ import { newId } from './grid'
  * Bir foto silinmeden önce undo geçmişi düşünülmeli: bu yüzden silme işi
  * yalnızca açılışta sahipsiz fotolar için yapılır (gcOrphanPhotos).
  */
+// Veritabanı adı eski adla kalır: değişirse kayıtlı fotoğraflar kaybolur.
 const photoStore = createStore('karakter-pusulasi', 'photos')
 
 const urlCache = new Map<string, Promise<string | null>>()

@@ -9,11 +9,10 @@ export const TITLE_MAX = 40
 export const LABEL_MAX = 24
 
 // --- İmza ---
-// TODO: Yayından önce değiştir. Bu alan adı bize ait değil, yer tutucu.
 /** PNG'nin sağ alt köşesindeki site adresi. */
-export const SITE_URL = 'karakterpusulasi.app'
+export const SITE_URL = 'compass.meteucar.com'
 /** Izgaranın altındaki imza şeridinin yüksekliği (px, 1080 içinde). */
-export const SIGNATURE_BAND = 30
+export const SIGNATURE_BAND = 42
 
 // --- Tuval ---
 /** Pusula her zaman bu boyutta (px) çizilir ve export edilir. */
@@ -55,4 +54,5 @@ export const DEFAULT_QUADRANT_COLORS = ['#FFADAD', '#A0C4FF', '#CAFFBF', '#FDFFB
 export const DEFAULT_BAND_COLORS = ['#CAFFBF', '#FDFFB6', '#FFADAD'] as const
 
 export const HISTORY_LIMIT = 50
+// Eski adla kalır: değişirse kayıtlı pusulalar kaybolur.
 export const STORAGE_KEY = 'karakter-pusulasi'

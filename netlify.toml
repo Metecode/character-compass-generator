@@ -1,0 +1,24 @@
+[build]
+  command = "pnpm build"
+  publish = "dist"
+
+[build.environment]
+  # Yereldeki sürümle aynı tut (.nvmrc).
+  NODE_VERSION = "22.20.0"
+
+# Vite'ın hash'li dosyaları içerik değişince adı da değiştiği için kalıcı önbelleklenebilir.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# index.html her seferinde sunucuya sorulsun ki yeni sürüm hemen gelsin.
+[[headers]]
+  for = "/"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"

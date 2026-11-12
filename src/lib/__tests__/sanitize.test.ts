@@ -31,7 +31,7 @@ describe('sanitizeCompass', () => {
 
   it('obje olmayan girdi varsayılan pusula döner', () => {
     expect(sanitizeCompass(null).cells).toHaveLength(9)
-    expect(sanitizeCompass('x').title).toBe('Karakter Pusulası')
+    expect(sanitizeCompass('x').title).toBe('Character Compass')
   })
 
   it('geçersiz boyut varsayılana (3x3) döner, yeni alanlar doldurulur', () => {
