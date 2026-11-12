@@ -80,7 +80,7 @@ export function EditorPanel() {
       <div className="px-4 pt-2 pb-3">
         <PanelHeader index={index} onClose={close} />
       </div>
-      <div className="overflow-y-auto overscroll-contain px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <div className="overflow-y-auto overscroll-contain px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
         {body}
       </div>
     </div>
