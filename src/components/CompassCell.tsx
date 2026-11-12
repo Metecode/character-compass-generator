@@ -1,0 +1,172 @@
+import { useDraggable, useDroppable } from '@dnd-kit/core'
+import { ArrowsLeftRight, Plus } from '@phosphor-icons/react'
+import { memo, useRef, useState } from 'react'
+import {
+  BULLET_FONT_MAX,
+  BULLET_FONT_MIN,
+  CELL_GAP,
+  CELL_PADDING,
+  CELL_PHOTO,
+  NAME_FONT_MAX,
+  NAME_FONT_MIN,
+} from '../constants'
+import { useAutoFitText } from '../hooks/useAutoFitText'
+import { usePhotoUrl } from '../hooks/usePhotoUrl'
+import { isCellEmpty } from '../lib/grid'
+import { useUiStore } from '../store/uiStore'
+import type { Cell } from '../types'
+
+interface Props {
+  cell: Cell
+  index: number
+  color: string
+  /** Hücre içi ölçü çarpanı (4x4 = 1). */
+  scale: number
+  uppercase: boolean
+  selected: boolean
+  onSelect: (id: string) => void
+}
+
+function CompassCellImpl({ cell, index, color, scale, uppercase, selected, onSelect }: Props) {
+  const px = (v: number) => Math.round(v * scale)
+  const photo = px(CELL_PHOTO)
+  const nameRef = useRef<HTMLDivElement>(null)
+  const bulletsRef = useRef<HTMLUListElement>(null)
+  const bullets = cell.bullets.filter((b) => b.trim() !== '')
+  const hasPhoto = Boolean(cell.photoId)
+  const empty = isCellEmpty(cell)
+  const photoUrl = usePhotoUrl(cell.photoId)
+  const openCrop = useUiStore((s) => s.openCrop)
+  const [fileOver, setFileOver] = useState(false)
+  const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
+
+  // Aynı düğüm hem sürüklenebilir hem bırakma hedefi: bırakınca içerikler takas edilir.
+  const drag = useDraggable({
+    id: cell.id,
+    disabled: empty,
+    attributes: { roleDescription: 'sürüklenebilir kart' },
+  })
+  const drop = useDroppable({ id: cell.id })
+  // Boş hücrede sürükleme kapalı ama hücre yine tıklanabilir: aria-disabled aktarılmaz.
+  const { 'aria-disabled': _dragDisabled, ...dragAttributes } = drag.attributes
+  const setRefs = (el: HTMLDivElement | null) => {
+    drag.setNodeRef(el)
+    drop.setNodeRef(el)
+  }
+  const swapTarget = drop.isOver && drag.active !== null && !drag.isDragging
+
+  useAutoFitText(nameRef, px(NAME_FONT_MAX), px(NAME_FONT_MIN), [cell.name, hasPhoto, uppercase])
+  useAutoFitText(bulletsRef, px(BULLET_FONT_MAX), px(BULLET_FONT_MIN), [bullets.join('\n'), hasPhoto])
+
+  return (
+    <div
+      ref={setRefs}
+      {...dragAttributes}
+      {...drag.listeners}
+      role="button"
+      tabIndex={0}
+      aria-label={`Hücre ${index + 1}${cell.name ? `: ${cell.name}` : ' (boş)'}`}
+      aria-pressed={selected}
+      onClick={() => onSelect(cell.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect(cell.id)
+        }
+      }}
+      onDragEnter={(e) => hasFiles(e) && setFileOver(true)}
+      onDragOver={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFileOver(false)
+      }}
+      onDrop={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        setFileOver(false)
+        onSelect(cell.id)
+        openCrop(cell.id, e.dataTransfer.files[0])
+      }}
+      data-cell
+      className="group relative flex min-h-0 min-w-0 cursor-pointer touch-manipulation flex-col overflow-hidden outline-none select-none [-webkit-touch-callout:none]"
+      style={{ background: color, padding: px(CELL_PADDING), gap: px(CELL_GAP) }}
+    >
+      <div className="flex min-w-0 items-center" style={{ gap: px(CELL_GAP) }}>
+        {hasPhoto && (
+          <div
+            className="shrink-0 overflow-hidden border-ink bg-white/60"
+            style={{ width: photo, height: photo, borderWidth: px(3) }}
+          >
+            {photoUrl && (
+              <img
+                src={photoUrl}
+                alt=""
+                draggable={false}
+                className="block size-full object-cover"
+                data-cell-photo
+              />
+            )}
+          </div>
+        )}
+        {cell.name.trim() !== '' && (
+          <div
+            ref={nameRef}
+            className={`min-w-0 flex-1 overflow-hidden leading-[1.05] font-black tracking-tight break-normal ${uppercase ? 'uppercase' : ''}`}
+            style={{ maxHeight: hasPhoto ? photo : photo * 0.8 }}
+          >
+            {cell.name}
+          </div>
+        )}
+      </div>
+
+      {bullets.length > 0 && (
+        <ul ref={bulletsRef} className="min-h-0 flex-1 overflow-hidden leading-[1.18] font-bold">
+          {bullets.map((b, i) => (
+            <li key={i} className="pl-[0.7em] -indent-[0.7em]">
+              - {b}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {drag.isDragging && (
+        <div className="editor-only pointer-events-none absolute inset-2 border-[3px] border-dashed border-ink/50 bg-white/65" />
+      )}
+
+      {empty && !swapTarget && (
+        <div className="editor-only pointer-events-none absolute inset-0 flex items-center justify-center">
+          <span className="flex size-20 items-center justify-center rounded-full border-[3px] border-dashed border-ink/40 text-ink/45 transition-colors group-hover:border-ink/70 group-hover:text-ink/70">
+            <Plus size={40} weight="bold" aria-hidden />
+          </span>
+        </div>
+      )}
+
+      {swapTarget && (
+        <div className="editor-only pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/60 text-2xl font-black uppercase shadow-[inset_0_0_0_8px_var(--color-focus)]">
+          <ArrowsLeftRight size={48} weight="bold" aria-hidden />
+          Yer değiştir
+        </div>
+      )}
+
+      {fileOver && (
+        <div className="editor-only pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 text-lg font-black uppercase shadow-[inset_0_0_0_6px_var(--color-focus)]">
+          Fotoğrafı bırak
+        </div>
+      )}
+
+      <div
+        aria-hidden
+        className={`editor-only pointer-events-none absolute inset-0 transition-[box-shadow] duration-150 ${
+          selected
+            ? 'shadow-[inset_0_0_0_6px_var(--color-focus)]'
+            : 'group-hover:shadow-[inset_0_0_0_4px_rgb(18_18_18/0.35)] group-focus-visible:shadow-[inset_0_0_0_6px_var(--color-focus)]'
+        }`}
+      />
+    </div>
+  )
+}
+
+export const CompassCell = memo(CompassCellImpl)
