@@ -75,9 +75,9 @@ export function Modal({ title, onClose, children, footer, size = 'md' }: Props) 
             <X size={20} weight="bold" aria-hidden />
           </button>
         </div>
-        <div className="overflow-y-auto px-4 pb-4 sm:px-5">{children}</div>
+        <div className={`overflow-y-auto px-4 sm:px-5 ${footer ? 'pb-4' : 'pb-[max(16px,env(safe-area-inset-bottom))]'}`}>{children}</div>
         {footer && (
-          <div className="flex justify-end gap-2 border-t-2 border-ink/10 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5">
+          <div className="flex justify-end gap-2 border-t-2 border-ink/10 p-4 pb-[max(16px,env(safe-area-inset-bottom))] sm:px-5">
             {footer}
           </div>
         )}

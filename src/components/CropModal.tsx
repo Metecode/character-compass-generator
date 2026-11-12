@@ -64,7 +64,7 @@ function CropDialog({ cellId, src }: { cellId: string; src: string }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="flex w-full max-w-lg flex-col gap-4 rounded-t-2xl border-[3px] border-ink bg-surface p-4 shadow-brutal-lg sm:rounded-2xl sm:p-5"
+        className="flex w-full max-w-lg flex-col gap-4 rounded-t-2xl border-[3px] border-ink bg-surface p-4 pb-[max(16px,env(safe-area-inset-bottom))] shadow-brutal-lg sm:rounded-2xl sm:p-5"
       >
         <h2 id={titleId} className="text-lg font-black tracking-tight">
           Fotoğrafı kırp
