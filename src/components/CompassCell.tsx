@@ -1,20 +1,11 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { ArrowsLeftRight, Plus } from '@phosphor-icons/react'
-import { memo, useRef, useState } from 'react'
-import {
-  BULLET_FONT_MAX,
-  BULLET_FONT_MIN,
-  CELL_GAP,
-  CELL_PADDING,
-  CELL_PHOTO,
-  NAME_FONT_MAX,
-  NAME_FONT_MIN,
-} from '../constants'
-import { useAutoFitText } from '../hooks/useAutoFitText'
-import { usePhotoUrl } from '../hooks/usePhotoUrl'
+import { memo, useState } from 'react'
+import { CELL_GAP, CELL_PADDING } from '../constants'
 import { isCellEmpty } from '../lib/grid'
 import { useUiStore } from '../store/uiStore'
 import type { Cell } from '../types'
+import { CellFace } from './CellFace'
 
 interface Props {
   cell: Cell
@@ -29,13 +20,7 @@ interface Props {
 
 function CompassCellImpl({ cell, index, color, scale, uppercase, selected, onSelect }: Props) {
   const px = (v: number) => Math.round(v * scale)
-  const photo = px(CELL_PHOTO)
-  const nameRef = useRef<HTMLDivElement>(null)
-  const bulletsRef = useRef<HTMLUListElement>(null)
-  const bullets = cell.bullets.filter((b) => b.trim() !== '')
-  const hasPhoto = Boolean(cell.photoId)
   const empty = isCellEmpty(cell)
-  const photoUrl = usePhotoUrl(cell.photoId)
   const openCrop = useUiStore((s) => s.openCrop)
   const [fileOver, setFileOver] = useState(false)
   const hasFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
@@ -54,9 +39,6 @@ function CompassCellImpl({ cell, index, color, scale, uppercase, selected, onSel
     drop.setNodeRef(el)
   }
   const swapTarget = drop.isOver && drag.active !== null && !drag.isDragging
-
-  useAutoFitText(nameRef, px(NAME_FONT_MAX), px(NAME_FONT_MIN), [cell.name, hasPhoto, uppercase])
-  useAutoFitText(bulletsRef, px(BULLET_FONT_MAX), px(BULLET_FONT_MIN), [bullets.join('\n'), hasPhoto])
 
   return (
     <div
@@ -94,43 +76,7 @@ function CompassCellImpl({ cell, index, color, scale, uppercase, selected, onSel
       className="group relative flex min-h-0 min-w-0 cursor-pointer touch-manipulation flex-col overflow-hidden outline-none select-none [-webkit-touch-callout:none]"
       style={{ background: color, padding: px(CELL_PADDING), gap: px(CELL_GAP) }}
     >
-      <div className="flex min-w-0 items-center" style={{ gap: px(CELL_GAP) }}>
-        {hasPhoto && (
-          <div
-            className="shrink-0 overflow-hidden border-ink bg-white/60"
-            style={{ width: photo, height: photo, borderWidth: px(3) }}
-          >
-            {photoUrl && (
-              <img
-                src={photoUrl}
-                alt=""
-                draggable={false}
-                className="block size-full object-cover"
-                data-cell-photo
-              />
-            )}
-          </div>
-        )}
-        {cell.name.trim() !== '' && (
-          <div
-            ref={nameRef}
-            className={`min-w-0 flex-1 overflow-hidden leading-[1.05] font-black tracking-tight break-normal ${uppercase ? 'uppercase' : ''}`}
-            style={{ maxHeight: hasPhoto ? photo : photo * 0.8 }}
-          >
-            {cell.name}
-          </div>
-        )}
-      </div>
-
-      {bullets.length > 0 && (
-        <ul ref={bulletsRef} className="min-h-0 flex-1 overflow-hidden leading-[1.18] font-bold">
-          {bullets.map((b, i) => (
-            <li key={i} className="pl-[0.7em] -indent-[0.7em]">
-              - {b}
-            </li>
-          ))}
-        </ul>
-      )}
+      <CellFace cell={cell} scale={scale} uppercase={uppercase} />
 
       {drag.isDragging && (
         <div className="editor-only pointer-events-none absolute inset-2 border-[3px] border-dashed border-ink/50 bg-white/65" />

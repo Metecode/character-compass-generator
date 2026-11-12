@@ -1,22 +1,59 @@
-import { ArrowDown, ArrowUp, DiceFive, Eraser, Plus, Sparkle, Trash } from '@phosphor-icons/react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type Announcements,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { CaretDown, DiceFive, DotsSixVertical, Eraser, Plus, Sparkle, Trash } from '@phosphor-icons/react'
 import { useId, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { BULLET_MAX, BULLETS_MAX, NAME_MAX } from '../constants'
 import { getTheme } from '../data/themes'
 import { rollBullet, suggestBullets } from '../lib/bulletPool'
-import { canAddBullet, clampBullet, clampName } from '../lib/limits'
 import { isCellEmpty } from '../lib/grid'
+import { canAddBullet, clampBullet, clampName } from '../lib/limits'
 import { breakCoalescing, useCompassStore } from '../store/compassStore'
 import { useUiStore } from '../store/uiStore'
 import { CharCounter } from './CharCounter'
 
 interface Props {
   cellId: string
-  /** Foto bölümü (3. adımda eklenir) gibi ek içerikler için yuva. */
+  /** İsmin solundaki foto alanı. */
   photoSlot?: ReactNode
+  /** "Diğer işlemler" içine giren ek içerik (yer değiştir). */
   extra?: ReactNode
+  /** Açılınca isim alanına odaklan (Enter ile sonraki hücreye geçince). */
+  autoFocusName?: boolean
+  /** Son maddede Enter: sonraki hücreye geç. Geçilemiyorsa false. */
+  onAdvance?: () => boolean
 }
 
-export function CellEditor({ cellId, photoSlot, extra }: Props) {
+const bulletId = (i: number) => `bullet-${i}`
+const bulletIndex = (id: string | number) => Number(String(id).slice('bullet-'.length))
+
+const announcements: Announcements = {
+  onDragStart: ({ active }) => `${bulletIndex(active.id) + 1}. madde alındı.`,
+  onDragOver: ({ over }) => (over ? `${bulletIndex(over.id) + 1}. sıraya taşınıyor.` : undefined),
+  onDragEnd: ({ active, over }) =>
+    over && over.id !== active.id
+      ? `Madde ${bulletIndex(over.id) + 1}. sıraya taşındı.`
+      : 'Bırakıldı, sıra değişmedi.',
+  onDragCancel: () => 'Taşıma iptal edildi.',
+}
+
+export function CellEditor({ cellId, photoSlot, extra, autoFocusName, onAdvance }: Props) {
   const uid = useId()
   const cell = useCompassStore((s) => s.compass.cells.find((c) => c.id === cellId))
   const updateCell = useCompassStore((s) => s.updateCell)
@@ -24,6 +61,7 @@ export function CellEditor({ cellId, photoSlot, extra }: Props) {
   const showToast = useUiStore((s) => s.showToast)
   /** Alan başına zarın son getirdiği madde: tekrar basınca hemen geri gelmesin. */
   const lastRolled = useRef(new Map<string, string>())
+  const nameRef = useRef<HTMLInputElement>(null)
   const bulletRefs = useRef<(HTMLInputElement | null)[]>([])
   // Odak, yeni madde DOM'a girer girmez (paint'ten önce) taşınır; aksi halde hızlı
   // yazılan ilk harfler önceki alana düşebilir.
@@ -33,6 +71,14 @@ export function CellEditor({ cellId, photoSlot, extra }: Props) {
     bulletRefs.current[pendingFocus.current]?.focus()
     pendingFocus.current = null
   })
+  useLayoutEffect(() => {
+    if (autoFocusName) nameRef.current?.focus()
+  }, [autoFocusName])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   if (!cell) return null
   const { bullets } = cell
@@ -83,42 +129,56 @@ export function CellEditor({ cellId, photoSlot, extra }: Props) {
   }
   const noBullets = bullets.every((b) => b.trim() === '')
 
-  const moveBullet = (i: number, dir: -1 | 1) => {
-    const j = i + dir
-    if (j < 0 || j >= bullets.length) return
-    const next = [...bullets]
-    ;[next[i], next[j]] = [next[j]!, next[i]!]
-    setBullets(next)
-    focusBullet(j)
+  /** Madde alanında Enter: sonraki madde, yeni madde ya da sonraki hücre. */
+  const onBulletEnter = (i: number) => {
+    if (i < bullets.length - 1) return focusBullet(i + 1)
+    // Son madde boşsa ya da madde sınırı dolduysa sonraki hücreye geç.
+    if (bullets[i]!.trim() !== '' && canAddBullet(bullets)) return addBullet()
+    onAdvance?.()
+  }
+
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return
+    const from = bulletIndex(active.id)
+    const to = bulletIndex(over.id)
+    setBullets(arrayMove(bullets, from, to))
   }
 
   return (
     <div className="flex flex-col gap-5">
-      {photoSlot}
-
       <div className="flex flex-col gap-1.5">
-        <div className="flex items-end justify-between gap-2">
-          <label htmlFor={`${uid}-name`} className="text-sm font-black tracking-wide uppercase">
-            İsim
-          </label>
-          <CharCounter id={`${uid}-name-count`} value={cell.name} max={NAME_MAX} />
+        <div className="flex items-end gap-3">
+          {photoSlot}
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <label htmlFor={`${uid}-name`} className="text-sm font-black tracking-wide uppercase">
+              İsim
+            </label>
+            <div className="relative">
+              <input
+                id={`${uid}-name`}
+                ref={nameRef}
+                className="field pr-14"
+                value={cell.name}
+                placeholder="ör. Ahmet"
+                autoComplete="off"
+                enterKeyHint="next"
+                aria-describedby={`${uid}-name-count`}
+                onChange={(e) => updateCell(cell.id, { name: clampName(e.target.value) })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    if (bullets.length === 0) addBullet()
+                    else focusBullet(0)
+                  }
+                }}
+              />
+              <InlineCounter id={`${uid}-name-count`} value={cell.name} max={NAME_MAX} />
+            </div>
+          </div>
         </div>
-        <input
-          id={`${uid}-name`}
-          className="field"
-          value={cell.name}
-          placeholder="ör. Ahmet"
-          autoComplete="off"
-          aria-describedby={`${uid}-name-count`}
-          onChange={(e) => updateCell(cell.id, { name: clampName(e.target.value) })}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              if (bullets.length === 0) addBullet()
-              else focusBullet(0)
-            }
-          }}
-        />
+        <p className="hidden text-xs text-muted sm:block">
+          İpucu: Fotoğrafı hücreye sürükleyebilir ya da kopyalayıp Ctrl+V ile yapıştırabilirsin.
+        </p>
       </div>
 
       <fieldset className="flex flex-col gap-2">
@@ -140,85 +200,45 @@ export function CellEditor({ cellId, photoSlot, extra }: Props) {
           </div>
         )}
 
-        <ol className="flex flex-col gap-2">
-          {bullets.map((b, i) => (
-            <li key={i} className="flex flex-col gap-1">
-              <div className="flex items-center gap-1.5">
-                <span aria-hidden className="w-3 shrink-0 text-center font-black">
-                  -
-                </span>
-                <label htmlFor={`${uid}-b${i}`} className="sr-only">
-                  Madde {i + 1}
-                </label>
-                <input
-                  id={`${uid}-b${i}`}
-                  ref={(el) => {
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          onDragEnd={onDragEnd}
+          accessibility={{
+            announcements,
+            screenReaderInstructions: {
+              draggable:
+                'Maddeyi taşımak için boşluk tuşuna bas, ok tuşlarıyla yerini seç, bırakmak için tekrar boşluğa bas. Vazgeçmek için Escape.',
+            },
+          }}
+        >
+          <SortableContext items={bullets.map((_, i) => bulletId(i))} strategy={verticalListSortingStrategy}>
+            <ol className="flex flex-col gap-2">
+              {bullets.map((b, i) => (
+                <BulletRow
+                  key={i}
+                  index={i}
+                  inputId={`${uid}-b${i}`}
+                  value={b}
+                  sortable={bullets.length > 1}
+                  inputRef={(el) => {
                     bulletRefs.current[i] = el
                   }}
-                  className="field min-w-0 flex-1"
-                  value={b}
-                  autoComplete="off"
-                  aria-describedby={`${uid}-b${i}-count`}
-                  onChange={(e) => {
+                  onChange={(v) => {
                     const next = [...bullets]
-                    next[i] = clampBullet(e.target.value)
+                    next[i] = clampBullet(v)
                     setBullets(next)
                   }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      if (i === bullets.length - 1) addBullet()
-                      else focusBullet(i + 1)
-                    } else if (e.key === 'Backspace' && b === '') {
-                      e.preventDefault()
-                      removeBullet(i)
-                    }
-                  }}
+                  onEnter={() => onBulletEnter(i)}
+                  onBackspaceEmpty={() => removeBullet(i)}
+                  onRoll={() => rollAt(i)}
+                  onRemove={() => removeBullet(i)}
                 />
-                <button
-                  type="button"
-                  className="btn btn-icon shrink-0"
-                  aria-label={`${i + 1}. madde için zar at`}
-                  title="Zar at: havuzdan rastgele madde"
-                  onClick={() => rollAt(i)}
-                >
-                  <DiceFive size={20} weight="bold" aria-hidden />
-                </button>
-              </div>
-              <div className="flex items-center justify-between gap-2 pl-4.5">
-                <CharCounter id={`${uid}-b${i}-count`} value={b} max={BULLET_MAX} />
-                <div className="flex gap-1">
-                  <button
-                    type="button"
-                    className="btn btn-icon min-h-9 w-9"
-                    aria-label={`${i + 1}. maddeyi yukarı taşı`}
-                    disabled={i === 0}
-                    onClick={() => moveBullet(i, -1)}
-                  >
-                    <ArrowUp size={16} weight="bold" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-icon min-h-9 w-9"
-                    aria-label={`${i + 1}. maddeyi aşağı taşı`}
-                    disabled={i === bullets.length - 1}
-                    onClick={() => moveBullet(i, 1)}
-                  >
-                    <ArrowDown size={16} weight="bold" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-icon btn-danger min-h-9 w-9"
-                    aria-label={`${i + 1}. maddeyi sil`}
-                    onClick={() => removeBullet(i)}
-                  >
-                    <Trash size={16} weight="bold" aria-hidden />
-                  </button>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ol>
+              ))}
+            </ol>
+          </SortableContext>
+        </DndContext>
 
         <button
           type="button"
@@ -231,19 +251,130 @@ export function CellEditor({ cellId, photoSlot, extra }: Props) {
         </button>
       </fieldset>
 
-      {extra}
-
-      <div className="border-t-2 border-dashed border-ink/25 pt-4">
-        <button
-          type="button"
-          className="btn btn-danger"
-          disabled={isCellEmpty(cell)}
-          onClick={() => clearCell(cell.id)}
-        >
-          <Eraser size={18} weight="bold" aria-hidden />
-          Hücreyi temizle
-        </button>
-      </div>
+      <details className="group rounded-lg border-2 border-ink/15">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-3 text-sm font-black tracking-wide uppercase [&::-webkit-details-marker]:hidden">
+          Diğer işlemler
+          <CaretDown size={16} weight="bold" className="transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="flex flex-col gap-4 border-t-2 border-ink/10 p-3">
+          {extra}
+          <button
+            type="button"
+            className="btn btn-danger self-start"
+            disabled={isCellEmpty(cell)}
+            onClick={() => clearCell(cell.id)}
+          >
+            <Eraser size={18} weight="bold" aria-hidden />
+            Hücreyi temizle
+          </button>
+        </div>
+      </details>
     </div>
+  )
+}
+
+/** Input'un içinde sağda duran küçük karakter sayacı. */
+function InlineCounter({ id, value, max }: { id: string; value: string; max: number }) {
+  return (
+    <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[11px] leading-none">
+      <CharCounter id={id} value={value} max={max} />
+    </span>
+  )
+}
+
+interface BulletRowProps {
+  index: number
+  inputId: string
+  value: string
+  sortable: boolean
+  inputRef: (el: HTMLInputElement | null) => void
+  onChange: (value: string) => void
+  onEnter: () => void
+  onBackspaceEmpty: () => void
+  onRoll: () => void
+  onRemove: () => void
+}
+
+/** [tutamaç] [input + sayaç] [zar] [sil] tek satırda. */
+function BulletRow({
+  index,
+  inputId,
+  value,
+  sortable,
+  inputRef,
+  onChange,
+  onEnter,
+  onBackspaceEmpty,
+  onRoll,
+  onRemove,
+}: BulletRowProps) {
+  const n = index + 1
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id: bulletId(index),
+      disabled: !sortable,
+      attributes: { roleDescription: 'sıralanabilir madde' },
+    })
+
+  return (
+    <li
+      ref={setNodeRef}
+      className={`flex items-center gap-1.5 rounded-lg ${isDragging ? 'relative z-10 bg-surface shadow-brutal' : ''}`}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+    >
+      <button
+        type="button"
+        ref={setActivatorNodeRef}
+        {...attributes}
+        {...listeners}
+        className="flex h-11 w-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-ink/60 hover:text-ink active:cursor-grabbing disabled:cursor-default disabled:opacity-30"
+        aria-label={`${n}. maddeyi taşı`}
+        disabled={!sortable}
+      >
+        <DotsSixVertical size={22} weight="bold" aria-hidden />
+      </button>
+      <label htmlFor={inputId} className="sr-only">
+        Madde {n}
+      </label>
+      <div className="relative min-w-0 flex-1">
+        <input
+          id={inputId}
+          ref={inputRef}
+          className="field pr-14"
+          value={value}
+          autoComplete="off"
+          enterKeyHint="next"
+          aria-describedby={`${inputId}-count`}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              onEnter()
+            } else if (e.key === 'Backspace' && value === '') {
+              e.preventDefault()
+              onBackspaceEmpty()
+            }
+          }}
+        />
+        <InlineCounter id={`${inputId}-count`} value={value} max={BULLET_MAX} />
+      </div>
+      <button
+        type="button"
+        className="btn btn-icon shrink-0"
+        aria-label={`${n}. madde için zar at`}
+        title="Zar at: havuzdan rastgele madde"
+        onClick={onRoll}
+      >
+        <DiceFive size={20} weight="bold" aria-hidden />
+      </button>
+      <button
+        type="button"
+        className="btn btn-icon btn-danger shrink-0"
+        aria-label={`${n}. maddeyi sil`}
+        onClick={onRemove}
+      >
+        <Trash size={18} weight="bold" aria-hidden />
+      </button>
+    </li>
   )
 }
