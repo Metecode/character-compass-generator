@@ -83,7 +83,7 @@ export function CompassCanvas({ artRef }: Props) {
         }}
       >
         <div
-          className="relative shrink-0 shadow-brutal-lg"
+          className="relative shrink-0 overflow-hidden shadow-brutal-lg"
           style={{
             width: CANVAS_SIZE * scale,
             height: CANVAS_SIZE * scale,

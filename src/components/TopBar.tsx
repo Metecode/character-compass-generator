@@ -29,7 +29,7 @@ export function TopBar({ actions }: Props) {
           value={title}
           onChange={(e) => setTitle(truncate(e.target.value, TITLE_MAX))}
           placeholder="Pusula başlığı"
-          className="min-h-11 w-full min-w-0 rounded-lg border-2 border-transparent bg-transparent px-2 text-lg font-black tracking-tight hover:border-ink/30 focus:border-ink sm:text-xl"
+          className="min-h-11 w-full min-w-0 rounded-lg border-2 border-transparent bg-transparent px-2 text-lg font-black tracking-tight hover:border-ink/30 focus-visible:border-focus focus-visible:shadow-[3px_3px_0_0_var(--color-focus)] focus-visible:outline-none sm:text-xl"
         />
       </div>
       {actions && (
