@@ -1,0 +1,97 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Archivo', ui-sans-serif, system-ui, sans-serif;
+
+  /* Semantik renk token'ları (editör arayüzü). Pusula renkleri store'dan gelir. */
+  --color-ink: #121212;
+  --color-paper: #fff8ec;
+  --color-surface: #ffffff;
+  --color-muted: #55524c;
+  --color-accent: #ffd23f;
+  --color-accent-hover: #ffc300;
+  --color-danger: #c81e1e;
+  --color-focus: #2f54eb;
+
+  --shadow-brutal: 4px 4px 0 0 var(--color-ink);
+  --shadow-brutal-sm: 2px 2px 0 0 var(--color-ink);
+  --shadow-brutal-lg: 6px 6px 0 0 var(--color-ink);
+
+  --animate-sheet-in: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-pop-in: pop-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  @keyframes sheet-in {
+    from {
+      transform: translateY(100%);
+    }
+  }
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  button {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+@layer components {
+  /* Ortak "brutal" buton */
+  .btn {
+    @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border-2 border-ink bg-surface px-3 text-sm font-bold shadow-brutal-sm transition-[transform,box-shadow,background-color] duration-150 select-none;
+  }
+  .btn:hover:not(:disabled) {
+    @apply -translate-x-px -translate-y-px shadow-brutal;
+  }
+  .btn:active:not(:disabled) {
+    @apply translate-x-0.5 translate-y-0.5 shadow-none;
+  }
+  .btn:disabled {
+    @apply opacity-45 shadow-none;
+  }
+  .btn-primary {
+    @apply bg-accent;
+  }
+  .btn-primary:hover:not(:disabled) {
+    @apply bg-accent-hover;
+  }
+  .btn-danger {
+    @apply text-danger;
+  }
+  .btn-icon {
+    @apply w-11 px-0;
+  }
+
+  .field {
+    @apply min-h-11 w-full rounded-lg border-2 border-ink bg-surface px-3 text-base font-medium placeholder:text-muted/70;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
