@@ -1,0 +1,33 @@
+# Supabase ücretsiz projesi 7 gün hareketsizlikte duraklar. Haftada iki kez
+# health fonksiyonunu çağırır; fonksiyon küçük bir sorgu çalıştırıp 204 döner.
+#
+# Gerekli repo değişkeni (Settings → Secrets and variables → Actions → Variables):
+#   SUPABASE_URL = https://iwdywhvfipdcuhfwlkba.supabase.co
+# Gizli değer gerekmez.
+name: Supabase keepalive
+
+on:
+  schedule:
+    # Pazartesi ve perşembe 06:17 UTC (tam saatlerden kaçınıldı; GitHub yoğunluğu)
+    - cron: '17 6 * * 1,4'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: health çağır
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+        run: |
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::error::SUPABASE_URL repo değişkeni tanımlı değil"
+            exit 1
+          fi
+          status=$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-delay 10 \
+            "$SUPABASE_URL/functions/v1/health")
+          echo "health: $status"
+          test "$status" = "204"

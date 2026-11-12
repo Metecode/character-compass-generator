@@ -23,6 +23,12 @@ pnpm + Node 22.20.0 (`.nvmrc`).
 - Fotolar IndexedDB'de Blob olarak (`src/lib/photos.ts`); store'da yalnızca `photoId` var.
   Undo geçmişi nedeniyle fotolar anında silinmez; sahipsizler açılışta temizlenir.
 - localStorage anahtarı ve IndexedDB adı eski adla (`karakter-pusulasi`) kalır; değiştirme, kayıtlar kaybolur.
+- Oyun linki (Aşama 2): Supabase Edge Functions (`supabase/functions/`), işletim adımları
+  `docs/supabase.md`. Tarayıcı yalnızca `fetch` + publishable anahtarla fonksiyonları çağırır
+  (`src/lib/gameApi.ts`, yalnızca dinamik import); supabase-js ön yüze eklenmez.
+  Doğrulama `supabase/functions/_shared/` içinde saf TS'dir ve vitest ile test edilir;
+  sunucu limitleri `_shared/limits.ts`'te kopya durur, `limits.test.ts` `src/constants.ts` ile eşleştirir.
+  Oyunlarım listesi ve delete_token `compass-games` anahtarında (`src/store/gamesStore.ts`), pusula şemasından ayrı.
 - Pusula her zaman 1080×1080 çizilir ve ekrana ölçeklenir; PNG, aynı DOM'dan
   `src/lib/exportPng.ts` ile alınır (fontlar ve fotolar beklenir, `.editor-only` öğeler çıkarılır).
 

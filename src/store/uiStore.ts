@@ -12,9 +12,14 @@ export interface Toast {
   tone: 'info' | 'error' | 'success'
 }
 
+export type GameDialog = 'create' | 'mine'
+
 interface UiState {
   crop: CropRequest | null
   toast: Toast | null
+  /** Açık oyun linki penceresi ("Oyun linki oluştur" ya da "Oyunlarım"). */
+  gameDialog: GameDialog | null
+  setGameDialog: (d: GameDialog | null) => void
   /** Dosyayı doğrular ve kırpma modalını açar. */
   openCrop: (cellId: string, file: File | null | undefined) => void
   closeCrop: () => void
@@ -28,6 +33,8 @@ let toastSeq = 0
 export const useUiStore = create<UiState>()((set, get) => ({
   crop: null,
   toast: null,
+  gameDialog: null,
+  setGameDialog: (gameDialog) => set({ gameDialog }),
 
   openCrop: (cellId, file) => {
     if (!isImageFile(file)) {

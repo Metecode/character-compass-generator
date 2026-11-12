@@ -56,3 +56,14 @@ export const DEFAULT_BAND_COLORS = ['#CAFFBF', '#FDFFB6', '#FFADAD'] as const
 export const HISTORY_LIMIT = 50
 // Eski adla kalır: değişirse kayıtlı pusulalar kaybolur.
 export const STORAGE_KEY = 'karakter-pusulasi'
+
+// --- Tahmin oyunu linki (sunucu limitleri: supabase/functions/_shared/limits.ts) ---
+/** Kurucunun seçebileceği süreler (saat). */
+export const GAME_DURATIONS_HOURS = [1, 24, 72] as const
+export const GAME_DEFAULT_DURATION_HOURS = 24
+/** İsmi ve en az bir maddesi olan bu kadar hücre yoksa oyun linki oluşturulamaz. */
+export const GAME_MIN_CELLS = 4
+/** Sunucuya gönderilen her foto en fazla bu boyutta olabilir. */
+export const GAME_PHOTO_MAX_BYTES = 150 * 1024
+/** Oyunlarım listesi (cihazda; delete_token burada durur). */
+export const GAMES_STORAGE_KEY = 'compass-games'

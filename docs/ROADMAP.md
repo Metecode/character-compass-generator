@@ -24,6 +24,7 @@ Arkadaş grupları için "karakter pusulası" meme'i üreten web uygulaması: ı
 - PNG'de site imzası.
 - Yeniden adlandırma (Character Compass), Netlify yayını, `compass.meteucar.com`.
 - iPhone'da PNG çıktısı doğrulandı.
+- **Aşama 2 — Supabase temeli (13 Kasım 2026):** şema ve migration'lar (RLS açık, policy yok, yalnızca service_role'a yetki), private foto kovası, `create-game` / `delete-game` / `cleanup` / `health` Edge Function'ları, yükleme doğrulaması (400×400 JPEG, ≤150 KB, en fazla 16 foto, gövde ≤3 MB), IP başına hız limiti (tuzlanmış özet, ≤1 saat), 15 dakikada bir temizlik (pg_cron + pg_net), GitHub Actions ile uyanık tutma, "Oyun linki oluştur" penceresi, "Oyunlarım", `/g/{code}` yer tutucu, `/gizlilik` sayfası. İşletim ve canlı doğrulama adımları: `docs/supabase.md`.
 
 ## 3. Verilen kararlar
 
@@ -59,7 +60,9 @@ Arkadaş grupları için "karakter pusulası" meme'i üreten web uygulaması: ı
 
 **Bitti sayılır:** En az 3 farklı grubun geri bildirimi toplandı; çıkan sorunlar küçük bir turda giderildi.
 
-### Aşama 2 — Supabase temeli
+### Aşama 2 — Supabase temeli ✅ Tamamlandı
+
+> Kod 13 Kasım 2026'da tamamlandı. Canlıya alma ve "Bitti sayılır" ölçütünün canlı doğrulaması: `docs/supabase.md`.
 
 - Proje kurulumu (AB bölgesi), şema, tüm tablolarda RLS açık ve anonim erişim kapalı.
 - Tüm yazma ve okuma işlemleri Edge Function üzerinden; service role anahtarı yalnızca orada.

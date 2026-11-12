@@ -2,6 +2,7 @@ import {
   ArrowCounterClockwise,
   CircleNotch,
   DownloadSimple,
+  LinkSimple,
   Palette,
   ShareNetwork,
   Swatches,
@@ -9,6 +10,7 @@ import {
 import { useMemo, useState, type ReactNode, type RefObject } from 'react'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { canShareFiles, downloadBlob, fileNameFor, renderCompassPng } from '../lib/exportPng'
+import { gameBlockReason } from '../lib/gamePayload'
 import { useCompassStore } from '../store/compassStore'
 import { useUiStore } from '../store/uiStore'
 import { GridSizePicker } from './GridSizePicker'
@@ -33,6 +35,8 @@ export function Toolbar({ artRef, history }: Props) {
   const showToast = useUiStore((s) => s.showToast)
   const coarse = useMediaQuery('(pointer: coarse)')
   const shareSupported = useMemo(() => coarse && canShareFiles(), [coarse])
+  const gameBlocked = useCompassStore((s) => gameBlockReason(s.compass.cells))
+  const setGameDialog = useUiStore((s) => s.setGameDialog)
 
   const render = async () => {
     const node = artRef.current
@@ -101,6 +105,23 @@ export function Toolbar({ artRef, history }: Props) {
         <ArrowCounterClockwise size={20} weight="bold" aria-hidden />
         <Label>Sıfırla</Label>
       </button>
+      <button
+        type="button"
+        className="btn"
+        aria-label="Oyun linki oluştur"
+        aria-disabled={gameBlocked ? true : undefined}
+        aria-describedby={gameBlocked ? 'game-block-reason' : undefined}
+        title={gameBlocked ?? undefined}
+        onClick={() => (gameBlocked ? showToast(gameBlocked) : setGameDialog('create'))}
+      >
+        <LinkSimple size={20} weight="bold" aria-hidden />
+        <Label>Oyun linki oluştur</Label>
+      </button>
+      {gameBlocked && (
+        <span id="game-block-reason" className="sr-only">
+          {gameBlocked}
+        </span>
+      )}
       {shareSupported && (
         <button
           type="button"

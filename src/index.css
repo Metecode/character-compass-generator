@@ -69,6 +69,13 @@
   .btn:disabled {
     @apply opacity-45 shadow-none;
   }
+  /* Tıklanabilir kalan (nedenini söyleyen) pasif buton */
+  .btn[aria-disabled='true'],
+  .btn[aria-disabled='true']:hover,
+  .btn[aria-disabled='true']:active {
+    @apply translate-0 opacity-45 shadow-none;
+    cursor: not-allowed;
+  }
   .btn-primary {
     @apply bg-accent;
   }

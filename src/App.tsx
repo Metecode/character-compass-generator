@@ -2,6 +2,8 @@ import { useRef } from 'react'
 import { CompassCanvas } from './components/CompassCanvas'
 import { CropModal } from './components/CropModal'
 import { EditorPanel } from './components/EditorPanel'
+import { Footer } from './components/Footer'
+import { GameDialogs } from './components/GameDialogs'
 import { HistoryButtons } from './components/HistoryButtons'
 import { ToastHost } from './components/ToastHost'
 import { Toolbar } from './components/Toolbar'
@@ -30,7 +32,9 @@ export default function App() {
         </section>
         <EditorPanel />
       </main>
+      <Footer />
       <CropModal />
+      <GameDialogs />
       <ToastHost />
     </div>
   )
