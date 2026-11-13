@@ -128,6 +128,13 @@
   }
 }
 
+/* PNG için ekran dışı çizim: animasyonlar ara karede yakalanmasın (soluk foto/isim). */
+.export-still,
+.export-still * {
+  animation: none !important;
+  transition: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

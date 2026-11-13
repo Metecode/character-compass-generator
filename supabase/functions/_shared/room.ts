@@ -16,6 +16,7 @@ import {
   ROOM_MODES,
   ROOM_ONLINE_SECONDS,
   ROOM_WRITE_SECONDS,
+  roomHasGuessing,
   type RoomMode,
   type RoomWriteSeconds,
 } from './limits.ts'
@@ -37,6 +38,8 @@ export interface RoomRow {
   creator_name: string
   admin_player_id: string | null
   grid_size: number | null
+  /** Başlatılırken yazılır: tahminli mi (lobide null). */
+  guessing: boolean | null
   writing_ends_at: string | null
   reveal_index: number | null
   reveal_step: 'guess' | 'shown' | null
@@ -85,7 +88,7 @@ export interface GuessRow {
 }
 
 export const ROOM_COLUMNS =
-  'code, channel_id, mode, write_seconds, allow_profanity, phase, creator_name, admin_player_id, grid_size, writing_ends_at, reveal_index, reveal_step, version, created_at, expires_at'
+  'code, channel_id, mode, write_seconds, allow_profanity, phase, creator_name, admin_player_id, grid_size, guessing, writing_ends_at, reveal_index, reveal_step, version, created_at, expires_at'
 export const PLAYER_COLUMNS = 'id, seq, name, photo_url, last_seen_at, ready_at, ring_pos, cell_index, score'
 export const REVEAL_ITEM_COLUMNS = 'author_id, target_id, ord, text, hidden'
 export const ITEM_COLUMNS = 'target_id, slot, text'
@@ -301,6 +304,11 @@ export interface MemberView {
   }
   creatorName: string
   expiresAt: string
+  /**
+   * Tahminli mi. Lobide oyuncu sayısına göre önizleme (başlatınca sunucu yazar);
+   * false ise açılışta tahmin ve skor yok.
+   */
+  guessing: boolean
   players: MemberPlayer[]
   /** Yalnızca YAZMA aşamasında. */
   writing?: WritingView
@@ -338,6 +346,11 @@ export interface RevealView {
   position: number
   total: number
   step: 'guess' | 'shown'
+  /**
+   * Bu hücrede tahmin var mı: tahminsiz odada ve son hücrede (tek aday) yok. false iken
+   * tahmin adımında hücre henüz kapalıdır (yalnızca tahminsiz odanın ilk hücresi).
+   */
+  cellGuessing: boolean
   /** O anki hücrenin ızgaradaki yeri. */
   cell: number
   /** O anki hücrenin görünür maddeleri. */
@@ -355,7 +368,7 @@ export interface RevealView {
   correct?: string[]
   /** Açılmış hücreler (gösterme adımındaysa o anki dahil). */
   opened: OpenCell[]
-  /** Puan azalan, eşitlikte oyuncu sırası. */
+  /** Puan azalan, eşitlikte oyuncu sırası. Tahminsiz odada boş. */
   scores: ScoreRow[]
 }
 
@@ -363,6 +376,7 @@ export interface RevealView {
 export interface ResultView {
   gridSize: number
   cells: OpenCell[]
+  /** Tahminsiz odada boş. */
   scores: ScoreRow[]
   /** Odanın silineceği an (ms). */
   deletesAt: number
@@ -443,7 +457,7 @@ export function projectMember(
       ? {
           gridSize: room.grid_size ?? 2,
           cells: openCells(sorted, revealData.items, Infinity),
-          scores: scoresOf(sorted),
+          scores: room.guessing === false ? [] : scoresOf(sorted),
           deletesAt: Date.parse(room.expires_at),
         }
       : null
@@ -463,6 +477,7 @@ export function projectMember(
     },
     creatorName: room.creator_name,
     expiresAt: room.expires_at,
+    guessing: room.guessing ?? roomHasGuessing(room.mode, players.length),
     players: sorted.map((p) => ({
       id: p.id,
       name: p.name,
@@ -520,26 +535,35 @@ function projectReveal(
   const cell = target.cell_index!
   const authors = new Set(items.filter((it) => it.target_id === target.id).map((it) => it.author_id))
   const shown = step === 'shown'
+  const total = players.filter((p) => p.cell_index !== null).length
+  const guessing = room.guessing !== false
+  const cellGuessing = guessing && position < total - 1
+  // Tahminsiz odanın ilk hücresi "Aç"a kadar kapalı: maddeler de görünmez.
+  const closed = !shown && !cellGuessing
   const view: RevealView = {
     gridSize: room.grid_size ?? 2,
     position,
-    total: players.filter((p) => p.cell_index !== null).length,
+    total,
     step,
+    cellGuessing,
     cell,
-    items: visibleItems(items, target.id),
-    candidates: players.filter((p) => p.cell_index !== null && p.cell_index >= cell).map((p) => p.id),
-    canGuess: !authors.has(meId),
-    myGuess: guesses.find((g) => g.player_id === meId)?.guessed_id ?? null,
+    items: closed ? [] : visibleItems(items, target.id),
+    candidates:
+      cellGuessing && !shown
+        ? players.filter((p) => p.cell_index !== null && p.cell_index >= cell).map((p) => p.id)
+        : [],
+    canGuess: cellGuessing && !authors.has(meId),
+    myGuess: cellGuessing ? (guesses.find((g) => g.player_id === meId)?.guessed_id ?? null) : null,
     opened: openCells(players, items, shown ? cell : cell - 1),
-    scores: scoresOf(players),
+    scores: guessing ? scoresOf(players) : [],
   }
-  if (room.admin_player_id === meId) {
+  if (cellGuessing && room.admin_player_id === meId) {
     view.guessed = guesses.length
     view.eligible = players.filter((p) => !authors.has(p.id)).length
   }
   if (shown) {
     view.target = target.id
-    view.correct = guesses.filter((g) => g.guessed_id === target.id).map((g) => g.player_id)
+    if (cellGuessing) view.correct = guesses.filter((g) => g.guessed_id === target.id).map((g) => g.player_id)
   }
   return view
 }

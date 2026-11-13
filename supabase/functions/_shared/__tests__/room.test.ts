@@ -26,6 +26,7 @@ import {
   type RevealItemRow,
   type RoomRow,
 } from '../room.ts'
+import { roomHasGuessing } from '../limits.ts'
 import { randomToken } from '../tokens.ts'
 
 const NOW = Date.parse('2026-11-17T12:00:00Z')
@@ -41,6 +42,7 @@ const room = (over: Partial<RoomRow> = {}): RoomRow => ({
   creator_name: 'Mete',
   admin_player_id: 'p1',
   grid_size: null,
+  guessing: null,
   writing_ends_at: null,
   reveal_index: null,
   reveal_step: null,
@@ -406,6 +408,54 @@ describe('açılış ve sonuç', () => {
     expect(v.result!.scores).toHaveLength(5)
     expect(v.result!.deletesAt).toBe(Date.parse(room().expires_at))
     expect(JSON.stringify(v)).not.toMatch(/author|kaba söz/)
+  })
+
+  it('tahmin kuralı: hücre başına 2 tahminci yoksa tahminsiz (Klasik 4), Klasik 5 ve Hızlı 3 tahminli', () => {
+    expect(roomHasGuessing('classic', 4)).toBe(false)
+    expect(roomHasGuessing('classic', 5)).toBe(true)
+    expect(roomHasGuessing('quick', 3)).toBe(true)
+    expect(roomHasGuessing('quick', 2)).toBe(false)
+    expect(roomHasGuessing('classic', 16)).toBe(true)
+  })
+
+  it('lobide tahminli olup olmadığı oyuncu sayısına göre önizlenir; başladıktan sonra odadaki değer', () => {
+    const four = ps.slice(0, 4).map((p) => ({ ...p, cell_index: null }))
+    expect(projectMember(room(), four, 'p1', NOW).guessing).toBe(false)
+    expect(projectMember(room(), ps, 'p1', NOW).guessing).toBe(true)
+    expect(projectMember(room({ mode: 'quick' }), ps.slice(0, 3), 'p1', NOW).guessing).toBe(true)
+    expect(projectMember(room({ phase: 'writing', guessing: false }), ps, 'p1', NOW).guessing).toBe(false)
+  })
+
+  it('son hücre: tahmin adımı yok, adaylar ve bilenler dönmez', () => {
+    const v = projectMember(reveal({ reveal_index: 4, reveal_step: 'shown', admin_player_id: 'p1' }), ps, 'p1', NOW, [], {
+      items,
+      guesses: [],
+    }).reveal!
+    expect(v.position).toBe(4)
+    expect(v.cellGuessing).toBe(false)
+    expect(v.canGuess).toBe(false)
+    expect(v.candidates).toEqual([])
+    expect(v.correct).toBeUndefined()
+    expect(v.guessed).toBeUndefined()
+    expect(v.target).toBe('p4')
+    expect(v.scores).toHaveLength(5) // ara skor tahminli odada sürer
+    const before = projectMember(reveal({ reveal_index: 3 }), ps, 'p1', NOW, [], { items, guesses: [] }).reveal!
+    expect(before.cellGuessing).toBe(true)
+  })
+
+  it('tahminsiz oda: ilk hücre "Aç"a kadar kapalı, tahmin ve skor yok; sonuçta skor tablosu boş', () => {
+    const r = (over: Partial<RoomRow>) => reveal({ guessing: false, admin_player_id: 'p1', ...over })
+    const closed = projectMember(r({}), ps, 'p1', NOW, [], { items, guesses: [] }).reveal!
+    expect(closed).toMatchObject({ step: 'guess', cellGuessing: false, canGuess: false, items: [], candidates: [], scores: [] })
+    expect(closed.eligible).toBeUndefined()
+    const open = projectMember(r({ reveal_index: 1, reveal_step: 'shown' }), ps, 'p2', NOW, [], { items, guesses: [] }).reveal!
+    expect(open.target).toBe('p1')
+    expect(open.correct).toBeUndefined()
+    expect(open.items.map((i) => i.text)).toEqual(['çok güler', 'kedici'])
+    const done = projectMember(room({ phase: 'done', grid_size: 3, guessing: false }), ps, 'p2', NOW, [], { items, guesses: [] })
+    expect(done.guessing).toBe(false)
+    expect(done.result!.scores).toEqual([])
+    expect(done.result!.cells).toHaveLength(5)
   })
 
   it('eylem gövdeleri', () => {

@@ -57,6 +57,8 @@ export interface MemberView {
   }
   creatorName: string
   expiresAt: string
+  /** Tahminli mi (lobide oyuncu sayısına göre önizleme). false: açılışta tahmin ve skor yok. */
+  guessing: boolean
   players: RoomPlayer[]
   /** Yalnızca YAZMA aşamasında. */
   writing?: WritingState
@@ -90,6 +92,8 @@ export interface RevealState {
   position: number
   total: number
   step: 'guess' | 'shown'
+  /** Bu hücrede tahmin var mı (tahminsiz odada ve son hücrede yok). */
+  cellGuessing: boolean
   cell: number
   items: RoomItem[]
   /** Hücresi henüz açılmamış oyuncular. */
@@ -236,6 +240,7 @@ const MESSAGES: Record<string, string> = {
   not_assigned: 'Bu madde sana atanmamış. Sayfayı yenile.',
   not_reveal: 'Açılış bitti.',
   stale: 'Ekran güncelleniyor, tekrar dene.',
+  no_guessing: 'Bu odada tahmin yok.',
   not_allowed: 'Bu kişiye sen de yazdın; bu hücrede tahmin yok.',
   invalid_guess: 'Bu kişi zaten açıldı, başka birini seç.',
   no_item: 'Bu madde artık yok.',

@@ -142,6 +142,14 @@ export const ROOM_ASSIGNMENT: Record<RoomMode, { targets: number; slots: number 
   classic: { targets: 3, slots: 1 },
   quick: { targets: 1, slots: 3 },
 }
+/**
+ * Hücre başına tahmin edebilecek kişi (oyuncu − hücreye yazan) bundan azsa oda tahminsiz
+ * oynanır (Klasik + 4 oyuncu). Hücreye yazan sayısı = ROOM_ASSIGNMENT[mode].targets.
+ */
+export const ROOM_MIN_GUESSERS = 2
+export const roomHasGuessing = (mode: RoomMode, players: number): boolean =>
+  players - ROOM_ASSIGNMENT[mode].targets >= ROOM_MIN_GUESSERS
+
 /** Süre bittikten sonra taslak kaydı için pay (son kayıt ve saat kayması). */
 export const ROOM_WRITE_GRACE_SECONDS = 5
 

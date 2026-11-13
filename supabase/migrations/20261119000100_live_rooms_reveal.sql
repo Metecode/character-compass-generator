@@ -15,9 +15,91 @@
 --
 -- Tahmin kuralı: bir hücreye madde yazmakla görevli olan oyuncu (boş bırakmış olsa da)
 -- o hücrede tahmin yapamaz; cevabı biliyor. Hedefin kendisi tahmin edebilir.
+-- Hücre başına tahmin edebilecek kişi (oyuncu − hücreye yazan) p_min_guessers'tan azsa
+-- (Klasik + 4 oyuncu) oda TAHMİNSİZ oynanır: rooms.guessing = false, başlatılırken yazılır.
+-- Tahminsiz odada her hücre doğrudan açılır, puan yok.
+-- Son hücre: tahminli odada da tahmin adımı yoktur (tek aday kalır), doğrudan açılır.
 
 alter table public.room_items
   add column ord smallint;
+
+alter table public.rooms
+  add column guessing boolean;
+
+comment on column public.rooms.guessing is
+  'Başlatılırken hesaplanır: hücre başına en az p_min_guessers kişi tahmin edebiliyor mu. Lobide null.';
+
+-- ---------------------------------------------------------------------------
+-- room_start (B'deki sürümün yerine): ek olarak tahminli mi hesaplanır.
+-- Hücreye yazan sayısı = p_targets (halkada her hedefe önceki p_targets kişi yazar).
+-- ---------------------------------------------------------------------------
+
+drop function public.room_start(text, uuid, integer, integer, integer, integer);
+
+create function public.room_start(
+  p_code text,
+  p_admin uuid,
+  p_min_players integer,
+  p_max_players integer,
+  p_targets integer,
+  p_slots integer,
+  p_min_guessers integer
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_room public.rooms;
+  v_ids uuid[];
+  v_n integer;
+begin
+  select * into v_room from public.rooms
+  where code = p_code and expires_at > now()
+  for update;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'not_found');
+  end if;
+  if v_room.admin_player_id is distinct from p_admin then
+    return jsonb_build_object('ok', false, 'error', 'not_admin');
+  end if;
+  if v_room.phase <> 'lobby' then
+    return jsonb_build_object('ok', false, 'error', 'not_lobby');
+  end if;
+
+  select array_agg(id order by random()) into v_ids
+  from public.room_players where room_code = p_code;
+  v_n := coalesce(array_length(v_ids, 1), 0);
+  if v_n < p_min_players then
+    return jsonb_build_object('ok', false, 'error', 'too_few', 'needed', p_min_players - v_n);
+  end if;
+  if v_n > p_max_players or p_targets >= v_n then
+    return jsonb_build_object('ok', false, 'error', 'too_many');
+  end if;
+
+  update public.room_players p
+  set ring_pos = r.pos - 1, ready_at = null, score = 0
+  from unnest(v_ids) with ordinality as r(id, pos)
+  where p.id = r.id;
+
+  insert into public.room_items (room_code, author_id, target_id, slot)
+  select p_code, v_ids[i], v_ids[((i - 1 + d) % v_n) + 1], s
+  from generate_series(1, v_n) as i,
+       generate_series(1, p_targets) as d,
+       generate_series(0, p_slots - 1) as s;
+
+  update public.rooms
+  set phase = 'writing',
+      grid_size = case when v_n <= 4 then 2 when v_n <= 9 then 3 else 4 end,
+      guessing = (v_n - p_targets) >= p_min_guessers,
+      writing_ends_at = now() + make_interval(secs => write_seconds),
+      version = version + 1
+  where code = p_code;
+
+  return jsonb_build_object('ok', true, 'guessing', (v_n - p_targets) >= p_min_guessers);
+end;
+$$;
 
 comment on column public.room_items.ord is
   'Açılışta hücre içindeki rastgele sıra; istemciye madde kimliği yerine bu gider.';
@@ -107,6 +189,9 @@ begin
   if v_room.phase <> 'reveal' then
     return jsonb_build_object('ok', false, 'error', 'not_reveal');
   end if;
+  if v_room.guessing is not true then
+    return jsonb_build_object('ok', false, 'error', 'no_guessing');
+  end if;
   if v_room.reveal_step <> 'guess' or v_room.reveal_index is distinct from p_position then
     return jsonb_build_object('ok', false, 'error', 'stale');
   end if;
@@ -143,7 +228,9 @@ $$;
 -- ---------------------------------------------------------------------------
 -- room_reveal_step: admin düğmesi.
 --   'open' — tahmin → göster: doğru tahminler işaretlenir, bilenlere 1 puan.
---   'next' — göster → sonraki hücrenin tahmin adımı; son hücredeyse BITTI
+--            (Tahminsiz odada yalnızca ilk hücre için: açılış kapalı başlar.)
+--   'next' — göster → sonraki hücrenin tahmin adımı (tahminsiz odada ve son hücrede
+--            doğrudan gösterme adımı); son hücredeyse BITTI
 --            (finished_at = şimdi, oda en geç p_done_ttl_seconds sonra silinir).
 -- p_position uymazsa 'stale' (çift dokunma, iki sekme). Döner: { ok, done }.
 -- error: not_found | not_admin | not_reveal | stale
@@ -202,8 +289,14 @@ begin
   select count(*) into v_total from public.room_players
   where room_code = p_code and cell_index is not null;
   if p_position + 1 < v_total then
+    -- Tahminsiz odada ve son hücrede (tek aday) tahmin adımı yok: doğrudan açılır.
     update public.rooms
-    set reveal_index = p_position + 1, reveal_step = 'guess', version = version + 1
+    set reveal_index = p_position + 1,
+        reveal_step = case
+          when v_room.guessing is not true or p_position + 2 >= v_total then 'shown'
+          else 'guess'
+        end,
+        version = version + 1
     where code = p_code;
     return jsonb_build_object('ok', true, 'done', false);
   end if;
@@ -270,6 +363,8 @@ begin
 end;
 $$;
 
+revoke all on function public.room_start(text, uuid, integer, integer, integer, integer, integer) from public, anon, authenticated;
+grant execute on function public.room_start(text, uuid, integer, integer, integer, integer, integer) to service_role;
 revoke all on function public.room_reveal_target(text, integer) from public, anon, authenticated;
 revoke all on function public.room_guess(text, uuid, integer, uuid) from public, anon, authenticated;
 revoke all on function public.room_reveal_step(text, uuid, integer, text, integer) from public, anon, authenticated;

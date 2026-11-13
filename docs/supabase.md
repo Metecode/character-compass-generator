@@ -14,7 +14,7 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 | Çözme süresi | `supabase/migrations/20261115000100_solve_time.sql` | `guess_starts` (cascade), `guesses.duration_seconds`, `start_guess()`; `submit_guess()` süreyi yazar |
 | Canlı oda (Aşama 4) | `supabase/migrations/20261117000100_live_rooms.sql` | `rooms`, `room_players`, `room_items`, `room_guesses` (odaya cascade); `room_join()`, `room_remove_player()`, `room_handover_admin()`; private `room-photos` kovası |
 | Canlı oda yazma (B) | `supabase/migrations/20261118000100_live_rooms_writing.sql` | `room_start()`, `room_save_items()`, `room_end_writing()`, `room_finish_writing()`, `room_enter_reveal()` |
-| Canlı oda açılış (C) | `supabase/migrations/20261119000100_live_rooms_reveal.sql` | `room_items.ord`; `room_enter_reveal()` (yeniden), `room_reveal_target()`, `room_guess()`, `room_reveal_step()`, `room_hide_item()` |
+| Canlı oda açılış (C) | `supabase/migrations/20261119000100_live_rooms_reveal.sql` | `room_items.ord`, `rooms.guessing`; `room_start()` (yeniden, `p_min_guessers`), `room_enter_reveal()` (yeniden), `room_reveal_target()`, `room_guess()`, `room_reveal_step()`, `room_hide_item()` |
 | Zamanlama | `supabase/migrations/20261113000200_schedules.sql` | pg_cron + pg_net; cleanup sırrı Vault'ta, DB içinde üretilir |
 | Fonksiyonlar | `supabase/functions/{create-game,delete-game,cleanup,health,get-game,start-game,use-hint,submit-guess,game-stats,create-room,join-room,get-room-state,room-action,room-admin}` | Hepsi `verify_jwt = false`; yetki kontrolü fonksiyon içinde |
 | Ortak kod | `supabase/functions/_shared/` | `validate.ts`, `play.ts`, `room.ts`, `jpeg.ts`, `tokens.ts`, `http.ts`, `ip.ts` saf TS → vitest; `game.ts`, `roomDb.ts`, `supabase.ts` Edge ortamı |
@@ -117,6 +117,14 @@ bir Edge Function'dır.
   alınır) → admin `reveal` → `shown` (sahibi ve doğru bilenler açık, bilenlere 1 puan,
   `room_players.score`) → admin `next` → sonraki hücrenin `guess`'i; sondaysa BITTI.
   Admin düğmeleri `{ position }` gönderir; güncel değilse 409 `stale` (çift dokunma, iki sekme).
+  **Son hücre:** tek aday kaldığı için tahmin adımı yok; `next` son hücreyi doğrudan `shown` yapar
+  (`cellGuessing: false`, istemcide "Son kişi").
+- **Tahminsiz oda (C):** `room_start` hücre başına tahmin edebilecek kişiyi hesaplar
+  (oyuncu − hücreye yazan = n − `ROOM_ASSIGNMENT.targets`); `ROOM_MIN_GUESSERS` (2) altındaysa
+  `rooms.guessing = false` (pratikte yalnızca Klasik + 4 oyuncu). Lobide `guessing` oyuncu sayısına
+  göre önizlenir ve not gösterilir. Açılış kapalı başlar (ilk hücrenin maddeleri de dönmez); admin
+  `reveal` ile ilk hücreyi, `next` ile sonrakileri doğrudan açar. `guess` 409 `no_guessing`;
+  `scores` her iki görünümde boş; BITTI'de yalnızca pusula ve düğmeler.
 - **Tahmin (C):** `room-action` → `guess` `{ position, playerId }` (`room_guess`, oda kilitli).
   Tahmin adımı bitene kadar değiştirilebilir. O hücreye madde yazmakla görevli olan (boş bıraksa da)
   tahmin edemez: 403 `not_allowed` (cevabı biliyor). Hedefin kendisi tahmin edebilir. Hücresi
@@ -174,6 +182,12 @@ tam oyun (5 dk lobi, 3 dk yazma, 16 hücre açılış ~15 dk):
 Ayda ~200 tam dolu oyun (tahmin oyunu kullanımı hariç). Nabız payı küçük (~%15); aralık 60 sn kaldı.
 B ölçümü (`pnpm room:e2e:write`, 4 oyuncu, 2 dk yazma, lobi ve geçiş dahil): toplam 46 durum isteği
 ve 8 `room-action`; taslak kaydı oyuncu başına 2–3 istekte kaldı. Tablodaki yazma tahmini korunur.
+C ölçümü (13 Kasım 2026, `pnpm room:e2e:reveal`, 6 oyuncu Klasik, tam oyun: kurma, katılma, yazma,
+6 hücre açılış, BITTI, PNG, aktarma, silme; ~2,5 dk): **200 çağrı** = `get-room-state` 146,
+`room-action` 34 (taslak + hazır + 15 tahmin), `room-admin` 14, `join-room` 5, `create-room` 1.
+Oyuncu başına ~33. Açılış hücre başına yaklaşık 2 sinyal × 6 durum isteği + tahminler; tablodaki
+16 kişilik ~1.300'lük açılış tahmini üst sınır olarak kalır (oyunlar daha kısa sürdü, nabız az
+tuttu).
 
 ### Fonksiyon ortam değişkenleri
 
@@ -390,12 +404,16 @@ Betikler `.env.local`'daki publishable anahtarla canlı fonksiyonları çağır�
   tahmin edemez (403), tahmin değişir, yanlış sıra 409, admin "2/2" görür, oyuncu yalnızca kendi
   tahminini görür; oyuncu açamaz / gizleyemez (403), tahmin adımında `next` 409, çift `reveal` 409;
   gizlenen madde o an ve sonuçta yok; açılınca sahibi ve bilenler, bilen 1 puan; açılmış kişi
-  tahmin edilemez (400); BITTI'de 5 hücre, silinme ~30 dk sonra; silinen oda 404.
+  tahmin edilemez (400); son hücre doğrudan açık, tahmin 409; BITTI'de 5 hücre, silinme ~30 dk
+  sonra; silinen oda 404. Ek odalar: Klasik + 4 tahminsiz (lobide önizleme, kapalı başlar, tahmin
+  409 `no_guessing`, "Aç" doğrudan açar, skor yok); Hızlı + 3 tahminli (hücre başına 2 tahminci,
+  son hücre doğrudan açık). Canlıda 13 Kasım 2026: hepsi geçti, betik 108 çağrı.
 - **Tam oyun, çok sekmeli (C)** (`pnpm dev` + `pnpm room:e2e:reveal`): admin masaüstünde, 5 oyuncu
   390 px'te; herkes yazıp hazır olunca açılış; her hücrede tahmin, admin "x/y", gizleme, "Aç",
   "Sıradaki"; bir oyuncu açılışta kopup döner; BITTI'de skor tablosu, silinme notu, PNG
   1080×1080, düzenleyiciye aktarma, "Odayı şimdi sil". Sonda bağlam başına Edge Function çağrı
-  sayısı. `HANDOVER=1` admin sekmesini kapatıp 5 dk sonraki devri de dener.
+  sayısı. `HANDOVER=1` admin sekmesini kapatıp 5 dk sonraki devri de dener. Lobide 4 kişiyken
+  "tahmin yok" notu görünür, 5. kişiyle kalkar; son hücrede "Son kişi".
 - **PNG boyutları (C)** (`pnpm dev` + `SHOTS=klasör pnpm room:png`): 4, 6 ve 11 oyunculu oyunlar
   API ile oynanır, sonuç ekranında PNG indirilir: 2×2, 3×3, 4×4, hepsi 1080×1080.
 - **Eski oyun fonksiyonları** (`pnpm game:check`, `scripts/game-api-check.mjs`): `_shared/` değişince
@@ -415,9 +433,7 @@ Betikler `.env.local`'daki publishable anahtarla canlı fonksiyonları çağır�
 - `cleanup` her turda en fazla 50 süresi dolmuş oyun ve 50 oda siler; kalanlar sonraki turda.
   Oda, süresi dolduktan sonra en geç ~15 dk daha diskte durur (istemcilere hemen 404).
 - Canlı oda kanalı public'tir; konu adını bilen biri sahte boş sinyal gönderebilir (veri sızmaz).
-- Klasik modda 4 oyuncuyla herkes herkese yazdığı için her hücrede yalnızca hedefin kendisi tahmin
-  edebilir ("kendini tanıdın mı?"); puanlama ince kalır. 5+ oyuncuda her hücrede n − 3 kişi tahmin eder.
-- Son açılan hücrede tek aday kalır (önceki hücreler adaylardan düşer); o hücre bedava puandır.
+- Klasik + 4 oyuncu tahminsiz oynanır (yukarıda); 5+ oyuncuda her hücrede n − 3, Hızlı'da n − 1 kişi tahmin eder.
 - Admin açılışta koparsa devir 5 dk bekler; o süre açılış durur (oyuncular bunu ekranda görür).
 - iOS Safari arka plana geçince soket kapanır; dönünce görünürlük olayıyla hemen yeniden çekilir.
   Gerçek cihazda denenmeli.

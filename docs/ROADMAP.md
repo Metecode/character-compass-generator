@@ -114,12 +114,17 @@ Kurallar:
 > isim ve bilenler; "Sıradaki"), oyuncu listesinden tek dokunuşla değiştirilebilir tahmin, admin için
 > "x/y tahmin etti", madde gizleme (ekrandan ve sonuçtan), ara skor şeridi, çevirme animasyonu ve
 > bilene vurgu (azaltılmış harekete uyar), BITTI'de skor tablosu, dolu pusula, PNG, düzenleyiciye
-> aktarma, "Odayı şimdi sil", 30 dk sonra silinme. Kod ve testler dalda; **migration ve fonksiyonlar
-> henüz canlıya alınmadı** (onay bekliyor), canlı denemeler ondan sonra.
+> aktarma, "Odayı şimdi sil", 30 dk sonra silinme. Sunucu 13 Kasım 2026'da canlıya alındı; API,
+> 6 kişilik tam oyun, admin devri ve 2×2/3×3/4×4 PNG canlıda doğrulandı (`docs/supabase.md`);
+> ön yüz dalda.
 > **Kararlar (C):** o hücreye madde yazmakla görevli olan tahmin edemez (cevabı biliyor); hedefin
-> kendisi edebilir. Açılmış kişiler adaylardan düşer. 1 doğru = 1 puan. Madde kimliği istemciye
-> gitmez (yazarlığı ele verirdi); gizleme hücre içi rastgele sırayla yapılır. Yazarlık oyun
-> bittikten sonra da gösterilmez.
+> kendisi edebilir. Hücre başına tahmin edebilecek kişi 2'den azsa (Klasik + 4 oyuncu) oda
+> **tahminsiz** oynanır: başlatırken sunucu hesaplar (`rooms.guessing`); açılışta tahmin adımı yok,
+> admin "Aç" ile tek tek açar, skor şeridi ve tablosu yok; lobide "4 kişiyle Klasik modda tahmin
+> yok…" notu. Tahminli odada son hücrede tahmin adımı yok (tek aday), doğrudan açılır ("Son kişi").
+> Açılmış kişiler adaylardan düşer. 1 doğru = 1 puan. Madde kimliği istemciye gitmez (yazarlığı
+> ele verirdi); gizleme hücre içi rastgele sırayla yapılır. Yazarlık oyun bittikten sonra da
+> gösterilmez. Tam oyun (6 kişi, Klasik) ~200 Edge Function çağrısı.
 > **Geçici gizli giriş:** "Canlı oda kur" menüde yalnızca cihazda bayrak varsa görünür
 > (`/?oda=1` yazar, `/?oda=0` siler; `src/lib/roomFlag.ts`). `/r/{kod}` bayraksız çalışır.
 > Cihazda denenip onaylanınca bayrak ve `roomFlag.ts` ayrı bir işle kaldırılacak.

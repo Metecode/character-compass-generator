@@ -66,6 +66,29 @@ const names = ['Admin', 'Ayşe', 'Burak', 'Ceren', 'Deniz']
 const p = [] // { name, session, id }
 let code = null
 
+/** API ile oda kurar, herkes yazıp hazır olur (aşama AÇILIŞ'a geçer). Döner: oyuncular. */
+async function quickRoom(mode, n) {
+  const out = []
+  const c = await call('create-room', form({ mode, writeSeconds: 120, name: 'Admin' }))
+  const roomCode = c.json.code
+  out.push({ session: c.json.session, id: c.json.playerId })
+  for (let i = 1; i < n; i++) {
+    const j = await call('join-room', form({ code: roomCode, name: `Oyuncu ${i}` }))
+    out.push({ session: j.json.session, id: j.json.playerId })
+  }
+  const g = (pl) => call('get-room-state', { code: roomCode, session: pl.session })
+  const lobby = await g(out[0])
+  await call('room-admin', { code: roomCode, session: out[0].session, action: 'start' })
+  for (const pl of out) {
+    const s = await g(pl)
+    const items = s.json.writing.assignments.flatMap((a, k) =>
+      a.texts.map((_, slot) => ({ target: a.targetId, slot, text: `madde ${k}-${slot}` })),
+    )
+    await call('room-action', { code: roomCode, session: pl.session, action: 'save-items', items, ready: true })
+  }
+  return { code: roomCode, players: out, lobby: lobby.json, get: g }
+}
+
 const state = (pl) => call('get-room-state', { code, session: pl.session })
 const act = (pl, action, extra = {}) => call('room-action', { code, session: pl.session, action, ...extra })
 const adm = (pl, action, extra = {}) => call('room-admin', { code, session: pl.session, action, ...extra })
@@ -177,11 +200,20 @@ try {
   const free1 = p.find((pl, i) => views1[i].json.reveal.canGuess)
   const opened = await act(free1, 'guess', { position: 1, playerId: targetId })
   check(opened.status === 400 && opened.json?.error === 'invalid_guess', 'açılmış kişi tahmin edilemez → 400', `${opened.status} ${opened.json?.error}`)
-  for (let pos = 1; pos < 5; pos++) {
+  for (let pos = 1; pos < 4; pos++) {
     const a = await adm(admin, 'reveal', { position: pos })
     const n = await adm(admin, 'next', { position: pos })
     if (a.status !== 200 || n.status !== 200) check(false, `hücre ${pos + 1}`, `${a.status} ${n.status}`)
   }
+
+  console.log('== Son hücre')
+  const lastView = (await state(admin)).json.reveal
+  check(lastView.position === 4 && lastView.step === 'shown' && lastView.cellGuessing === false, 'son hücre doğrudan açık (tahmin adımı yok)', `${lastView.position} ${lastView.step}`)
+  check(lastView.correct === undefined && lastView.guessed === undefined && lastView.candidates.length === 0, 'son hücrede bilen/sayı/aday yok')
+  const lastGuess = await act(free1, 'guess', { position: 4, playerId: lastView.target })
+  check(lastGuess.status === 409, 'son hücrede tahmin → 409', String(lastGuess.status))
+  const lastNext = await adm(admin, 'next', { position: 4 })
+  check(lastNext.status === 200 && lastNext.json?.done === true, 'son hücreden sonra BITTI', String(lastNext.status))
 
   console.log('== BITTI')
   const done = await state(others[3])
@@ -196,6 +228,59 @@ try {
   check(sum >= 1, 'skor tablosu dolu', JSON.stringify(done.json.result.scores.map((s) => s.score)))
   const hideDone = await adm(admin, 'hide', { cell: targetCell.cell, key: targetCell.items[0].key })
   check(hideDone.status === 200, 'BITTI\'de de gizlenebilir', String(hideDone.status))
+
+  console.log('== Klasik + 4 oyuncu: tahminsiz')
+  {
+    const r4 = await quickRoom('classic', 4)
+    try {
+      check(r4.lobby.guessing === false, 'lobide "tahmin yok" önizlemesi (guessing=false)')
+      const v = (await r4.get(r4.players[1])).json
+      check(v.phase === 'reveal' && v.guessing === false, 'açılışta guessing=false')
+      const rv = v.reveal
+      check(rv.step === 'guess' && rv.cellGuessing === false && rv.items.length === 0 && rv.candidates.length === 0, 'ilk hücre "Aç"a kadar kapalı (madde yok)')
+      check(rv.scores.length === 0, 'skor yok')
+      const g = await call('room-action', { code: r4.code, session: r4.players[1].session, action: 'guess', position: 0, playerId: r4.players[2].id })
+      check(g.status === 409 && g.json?.error === 'no_guessing', 'tahmin → 409 no_guessing', `${g.status} ${g.json?.error}`)
+      const adminS = r4.players[0].session
+      const o = await call('room-admin', { code: r4.code, session: adminS, action: 'reveal', position: 0 })
+      check(o.status === 200, 'admin "Aç" ile ilk hücreyi açtı')
+      const v0 = (await r4.get(r4.players[1])).json.reveal
+      check(v0.step === 'shown' && v0.items.length === 3 && v0.correct === undefined, 'açılınca maddeler ve sahibi; bilen yok')
+      const n0 = await call('room-admin', { code: r4.code, session: adminS, action: 'next', position: 0 })
+      const v1 = (await r4.get(r4.players[1])).json.reveal
+      check(n0.status === 200 && v1.position === 1 && v1.step === 'shown', '"Aç" sonraki hücreyi doğrudan açar')
+      for (let pos = 1; pos < 4; pos++) await call('room-admin', { code: r4.code, session: adminS, action: 'next', position: pos })
+      const d = (await r4.get(r4.players[2])).json
+      check(d.phase === 'done' && d.result.scores.length === 0 && d.result.cells.length === 4, 'BITTI: 4 hücre, skor tablosu yok')
+    } finally {
+      await call('room-admin', { code: r4.code, session: r4.players[0].session, action: 'delete' })
+    }
+  }
+
+  console.log('== Klasik + 5 ve Hızlı + 3: tahminli')
+  check(s0.json.guessing === true, 'Klasik 5: guessing=true (yukarıdaki oyun)')
+  {
+    const r3 = await quickRoom('quick', 3)
+    try {
+      check(r3.lobby.guessing === true, 'Hızlı 3: lobide tahminli')
+      const views3 = await Promise.all(r3.players.map((pl) => r3.get(pl)))
+      const rv = views3[0].json.reveal
+      check(views3[0].json.guessing === true && rv.cellGuessing === true && rv.items.length === 3, 'Hızlı 3: ilk hücrede tahmin adımı, 3 madde')
+      check(views3.filter((v) => v.json.reveal.canGuess).length === 2, 'Hızlı 3: hücre başına 2 kişi tahmin edebilir')
+      check(rv.eligible === 2 || rv.eligible === undefined, 'admin sayısı 2 (admin yazarsa yine 2)', String(rv.eligible))
+      const adminS = r3.players[0].session
+      await call('room-admin', { code: r3.code, session: adminS, action: 'reveal', position: 0 })
+      await call('room-admin', { code: r3.code, session: adminS, action: 'next', position: 0 })
+      const p1 = (await r3.get(r3.players[0])).json.reveal
+      check(p1.position === 1 && p1.step === 'guess' && p1.cellGuessing, 'Hızlı 3: ikinci hücre tahminli')
+      await call('room-admin', { code: r3.code, session: adminS, action: 'reveal', position: 1 })
+      await call('room-admin', { code: r3.code, session: adminS, action: 'next', position: 1 })
+      const p2 = (await r3.get(r3.players[0])).json.reveal
+      check(p2.position === 2 && p2.step === 'shown' && !p2.cellGuessing, 'Hızlı 3: son hücre doğrudan açık')
+    } finally {
+      await call('room-admin', { code: r3.code, session: r3.players[0].session, action: 'delete' })
+    }
+  }
 } finally {
   if (code && p[0]) {
     const d = await adm(p[0], 'delete')

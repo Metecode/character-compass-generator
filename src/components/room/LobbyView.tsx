@@ -84,6 +84,11 @@ export function LobbyView({
               ? 'Yeterli kişi var. Herkes gelince oyunu başlat.'
               : 'Herkes gelince yazma aşaması başlayacak.'}
         </p>
+        {missing === 0 && !data.guessing && (
+          <p className="mt-3 rounded-lg border-2 border-dashed border-ink bg-paper p-2.5 text-sm font-bold" role="note">
+            {`${count} kişiyle ${MODE_LABELS[mode].title} modda tahmin yok, yalnızca açılış. Puanlı oynamak için Hızlı modu seç ya da ${minPlayers + 1}+ kişi olun.`}
+          </p>
+        )}
         <p className="mt-3 text-sm font-bold text-muted">
           {MODE_LABELS[mode].title} · {writeTimeLabel(writeSeconds)} yazma · {allowProfanity ? 'argo serbest' : 'argo süzgeci açık'}
         </p>

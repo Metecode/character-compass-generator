@@ -14,7 +14,7 @@
  *   guess       { position, playerId } — AÇILIŞ'ın tahmin adımında o anki hücre için
  *                 tahmin (değiştirilebilir). Hücreye madde yazmakla görevli olan
  *                 tahmin edemez (403 not_allowed). Sinyal yalnızca admine ("x/y").
- *                 `position` güncel değilse 409 stale.
+ *                 `position` güncel değilse 409 stale; tahminsiz odada 409 no_guessing.
  *
  * Limit: oturum başına saatte 600.
  */

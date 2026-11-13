@@ -7,11 +7,13 @@
  *   kick   { playerId } — yalnızca LOBI'de; admin kendini çıkaramaz.
  *   delete              — odayı fotoğraflarıyla birlikte hemen siler.
  *   start               — LOBI → YAZMA. Oyuncu sayısı mod alt sınırını sağlamalı
- *                         (409 too_few + needed). Halka ve boş madde satırları kurulur.
+ *                         (409 too_few + needed). Halka ve boş madde satırları kurulur;
+ *                         hücre başına 2'den az tahminci kalacaksa oda tahminsiz (guessing=false).
  *   end-writing         — yazmayı erken bitirir: bitiş anı şimdiye çekilir, kayıt
  *                         payından sonraki ilk durum isteği aşamayı ilerletir.
  *   reveal { position } — AÇILIŞ: o anki hücrede tahmin → göster; doğru bilenlere puan.
- *   next   { position } — göster → sonraki hücre; son hücredeyse BITTI (oda
+ *   next   { position } — göster → sonraki hücre (tahminsiz odada ve son hücrede doğrudan
+ *                         açık); son hücredeyse BITTI (oda
  *                         ROOM_DONE_TTL_SECONDS sonra silinir).
  *   hide   { cell, key } — açılmış ya da o an açık hücredeki maddeyi gizler
  *                         (ekrandan ve sonuç pusulasından kalkar; geri alınamaz).
@@ -22,7 +24,13 @@
 
 import { readJson } from '../_shared/game.ts'
 import { errorJson, json } from '../_shared/http.ts'
-import { ROOM_ASSIGNMENT, ROOM_DONE_TTL_SECONDS, ROOM_MAX_PLAYERS, ROOM_MIN_PLAYERS } from '../_shared/limits.ts'
+import {
+  ROOM_ASSIGNMENT,
+  ROOM_DONE_TTL_SECONDS,
+  ROOM_MAX_PLAYERS,
+  ROOM_MIN_GUESSERS,
+  ROOM_MIN_PLAYERS,
+} from '../_shared/limits.ts'
 import { ROOM_ADMIN_ACTIONS, channelTopic, isUuid, parseAction, parseHide, parsePosition } from '../_shared/room.ts'
 import { loadLiveRoom, playerBySession, removeRoomPhoto } from '../_shared/roomDb.ts'
 import {
@@ -86,6 +94,7 @@ serve('room-admin', ['POST'], async (req, origin) => {
         p_max_players: ROOM_MAX_PLAYERS,
         p_targets: targets,
         p_slots: slots,
+        p_min_guessers: ROOM_MIN_GUESSERS,
       })
       if (error) throw new Error('start failed')
       const r = data as { ok: boolean; error?: string; needed?: number }

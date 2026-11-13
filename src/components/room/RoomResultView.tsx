@@ -133,45 +133,51 @@ export function RoomResultView({
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-4">
-      <section className="rounded-2xl border-[3px] border-ink bg-accent p-5 text-center shadow-brutal-lg motion-safe:animate-pop-in">
-        <Trophy size={44} weight="fill" className="mx-auto" aria-hidden />
-        <p className="mt-1 text-sm font-black tracking-wide uppercase">Oyun bitti</p>
-        <h1 className="mt-1 text-3xl leading-tight font-black tracking-tight text-balance">
-          {winners.ids.length === 0
-            ? 'Bu sefer kimse bilemedi!'
-            : winners.ids.length === 1
-              ? `Kazanan: ${winnerNames[0]}`
-              : `Kazananlar: ${winnerNames.join(', ')}`}
-        </h1>
-        {winners.score > 0 && <p className="mt-1 text-lg font-bold">{winners.score} puan</p>}
-      </section>
+      {data.guessing ? (
+        <>
+          <section className="rounded-2xl border-[3px] border-ink bg-accent p-5 text-center shadow-brutal-lg motion-safe:animate-pop-in">
+            <Trophy size={44} weight="fill" className="mx-auto" aria-hidden />
+            <p className="mt-1 text-sm font-black tracking-wide uppercase">Oyun bitti</p>
+            <h1 className="mt-1 text-3xl leading-tight font-black tracking-tight text-balance">
+              {winners.ids.length === 0
+                ? 'Bu sefer kimse bilemedi!'
+                : winners.ids.length === 1
+                  ? `Kazanan: ${winnerNames[0]}`
+                  : `Kazananlar: ${winnerNames.join(', ')}`}
+            </h1>
+            {winners.score > 0 && <p className="mt-1 text-lg font-bold">{winners.score} puan</p>}
+          </section>
 
-      <section aria-labelledby="scores-title" className="rounded-2xl border-[3px] border-ink bg-surface p-4 shadow-brutal">
-        <h2 id="scores-title" className="text-lg font-black tracking-tight">
-          Skor tablosu
-        </h2>
-        <ol className="mt-2 flex flex-col gap-1.5">
-          {res.scores.map((s, i) => {
-            const p = players.get(s.playerId)
-            const me = s.playerId === data.me.id
-            return (
-              <li
-                key={s.playerId}
-                className={`flex items-center gap-2 rounded-xl border-2 border-ink p-1.5 ${me ? 'bg-accent' : 'bg-paper'}`}
-              >
-                <span className="w-7 text-center font-black tabular-nums">{ranks[i]}.</span>
-                {p && <img src={p.photo} alt="" className="size-9 rounded-full border-2 border-ink object-cover" />}
-                <span className="min-w-0 flex-1 truncate font-bold">
-                  {p?.name ?? 'Oyuncu'}
-                  {me && <span className="text-muted"> (sen)</span>}
-                </span>
-                {ranks[i] === 1 && s.score > 0 && <Crown size={18} weight="fill" aria-label="Birinci" />}
-                <span className="pr-2 text-lg font-black tabular-nums">{s.score}</span>
-              </li>
-            )
-          })}
-        </ol>
-      </section>
+          <section aria-labelledby="scores-title" className="rounded-2xl border-[3px] border-ink bg-surface p-4 shadow-brutal">
+            <h2 id="scores-title" className="text-lg font-black tracking-tight">
+              Skor tablosu
+            </h2>
+            <ol className="mt-2 flex flex-col gap-1.5">
+              {res.scores.map((s, i) => {
+                const p = players.get(s.playerId)
+                const me = s.playerId === data.me.id
+                return (
+                  <li
+                    key={s.playerId}
+                    className={`flex items-center gap-2 rounded-xl border-2 border-ink p-1.5 ${me ? 'bg-accent' : 'bg-paper'}`}
+                  >
+                    <span className="w-7 text-center font-black tabular-nums">{ranks[i]}.</span>
+                    {p && <img src={p.photo} alt="" className="size-9 rounded-full border-2 border-ink object-cover" />}
+                    <span className="min-w-0 flex-1 truncate font-bold">
+                      {p?.name ?? 'Oyuncu'}
+                      {me && <span className="text-muted"> (sen)</span>}
+                    </span>
+                    {ranks[i] === 1 && s.score > 0 && <Crown size={18} weight="fill" aria-label="Birinci" />}
+                    <span className="pr-2 text-lg font-black tabular-nums">{s.score}</span>
+                  </li>
+                )
+              })}
+            </ol>
+          </section>
+        </>
+      ) : (
+        <h1 className="text-2xl font-black tracking-tight">Oyun bitti</h1>
+      )}
 
       <RoomBoard gridSize={res.gridSize} cells={res.cells} players={players} maxWidth={560} />
 
@@ -233,7 +239,7 @@ export function RoomResultView({
 
       {exportPhotos &&
         createPortal(
-          <div aria-hidden className="pointer-events-none fixed top-0 -left-[20000px]">
+          <div aria-hidden className="export-still pointer-events-none fixed top-0 -left-[20000px]">
             <RoomBoardArt
               ref={artRef}
               gridSize={res.gridSize}

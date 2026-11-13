@@ -134,6 +134,10 @@ export function RevealView({
   const fresh = useMemo(() => new Set(shown ? (r.correct ?? []) : []), [shown, r.correct])
   const admin = data.players.find((p) => p.isAdmin)
   const adminAway = !isAdmin && admin && !admin.online
+  const guessing = data.guessing
+  /** Tahminsiz odanın ilk hücresi: "Aç"a kadar kapalı. */
+  const closed = !shown && !r.cellGuessing
+  const nextLabel = last ? 'Sonuçları göster' : guessing ? 'Sıradaki' : 'Aç'
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-4 pb-24">
@@ -141,9 +145,11 @@ export function RevealView({
         <p className="text-sm font-black tracking-wide text-muted uppercase">
           Açılış · <span className="text-ink tabular-nums">{r.position + 1}/{r.total}</span>
         </p>
-        <p className="text-sm font-bold text-muted">{shown ? 'Açıldı' : 'Bu kim?'}</p>
+        <p className="text-sm font-bold text-muted">
+          {shown ? (last ? 'Son kişi' : 'Açıldı') : closed ? 'Tahminsiz açılış' : 'Bu kim?'}
+        </p>
       </div>
-      <ScoreStrip scores={r.scores} players={players} meId={data.me.id} fresh={fresh} />
+      {guessing && <ScoreStrip scores={r.scores} players={players} meId={data.me.id} fresh={fresh} />}
 
       {/* Kart: tahmin adımında maddeler; açılınca döner, foto ve isim görünür. */}
       <section
@@ -167,28 +173,48 @@ export function RevealView({
               {target.id === data.me.id ? `${target.name} (sen!)` : target.name}
             </h1>
           </div>
+        ) : closed ? (
+          <div className="py-4 text-center">
+            <h1 id="reveal-title" className="text-3xl font-black tracking-tight">
+              Açılış başlıyor
+            </h1>
+            <p className="mt-2 text-[15px]">
+              Bu odada tahmin yok: {isAdmin ? 'sen' : (admin?.name ?? 'admin')} açtıkça kişiler ve maddeleri
+              tek tek görünecek.
+            </p>
+          </div>
         ) : (
           <h1 id="reveal-title" className="text-center text-3xl font-black tracking-tight">
             Bu kim?
           </h1>
         )}
 
-        <ItemList
-          items={r.items}
-          canHide={isAdmin}
-          onHide={(item) => setConfirm({ kind: 'hide', item })}
-        />
+        {!closed && (
+          <ItemList
+            items={r.items}
+            canHide={isAdmin}
+            onHide={(item) => setConfirm({ kind: 'hide', item })}
+          />
+        )}
 
-        {shown && <Verdict data={data} players={players} />}
+        {shown && r.cellGuessing && <Verdict data={data} players={players} />}
+        {shown && last && guessing && (
+          <p className="mt-4 text-center text-sm font-bold">Son kişi: tek aday kaldığı için tahmin yok.</p>
+        )}
       </section>
 
       <p className="sr-only" aria-live="polite">
         {shown && target
-          ? `${target.name}. ${correct.length === 0 ? 'Kimse bilemedi.' : `${correct.length} kişi bildi.`}`
-          : `${r.position + 1}. hücre açıldı, tahmin zamanı.`}
+          ? r.cellGuessing
+            ? `${target.name}. ${correct.length === 0 ? 'Kimse bilemedi.' : `${correct.length} kişi bildi.`}`
+            : target.name
+          : closed
+            ? 'Açılış başlıyor.'
+            : `${r.position + 1}. hücre açıldı, tahmin zamanı.`}
       </p>
 
       {!shown &&
+        r.cellGuessing &&
         (r.canGuess ? (
           <section aria-labelledby="guess-title" className="rounded-2xl border-[3px] border-ink bg-surface p-4 shadow-brutal">
             <h2 id="guess-title" className="text-lg font-black tracking-tight">
@@ -233,7 +259,7 @@ export function RevealView({
           gridSize={r.gridSize}
           cells={r.opened}
           players={players}
-          current={shown ? null : { cell: r.cell, items: r.items }}
+          current={shown || closed ? null : { cell: r.cell, items: r.items }}
           maxWidth={520}
         />
       </section>
@@ -252,7 +278,11 @@ export function RevealView({
         <div className="fixed inset-x-0 bottom-0 z-20 border-t-[3px] border-ink bg-paper/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur">
           <div className="mx-auto flex max-w-xl items-center gap-3">
             <p className="min-w-0 flex-1 text-sm font-bold" aria-live="polite">
-              {shown
+              {!r.cellGuessing
+                ? shown && last && guessing
+                  ? 'Son kişi'
+                  : 'Tahminsiz açılış'
+                : shown
                 ? correct.length === 0
                   ? 'Kimse bilemedi'
                   : `${correct.length} kişi bildi`
@@ -263,14 +293,14 @@ export function RevealView({
             <button type="button" className="btn btn-primary min-h-12 px-5 text-base" onClick={advance} disabled={busy}>
               {busy ? (
                 <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
-              ) : !shown ? (
+              ) : !shown || (!last && !guessing) ? (
                 <Eye size={20} weight="bold" aria-hidden />
               ) : last ? (
                 <Trophy size={20} weight="fill" aria-hidden />
               ) : (
                 <ArrowRight size={20} weight="bold" aria-hidden />
               )}
-              {!shown ? 'Aç' : last ? 'Sonuçları göster' : 'Sıradaki'}
+              {!shown ? 'Aç' : nextLabel}
             </button>
           </div>
         </div>

@@ -121,6 +121,17 @@ try {
     await p.page.getByRole('button', { name: 'Odaya gir' }).click()
     await p.page.getByRole('heading', { name: /Katılanlar/ }).waitFor({ timeout: 20000 })
     players.push(p)
+    if (players.length === 3) {
+      const note = '4 kişiyle Klasik modda tahmin yok, yalnızca açılış. Puanlı oynamak için Hızlı modu seç ya da 5+ kişi olun.'
+      await admin.page.getByText(note).waitFor({ timeout: 15000 })
+      await p.page.getByText(note).waitFor({ timeout: 15000 })
+      check(true, '4 kişide lobide "tahmin yok" notu (admin ve oyuncu)')
+      await shot(p, 'c00-lobi-tahminsiz-mobil')
+    }
+    if (players.length === 4) {
+      await admin.page.getByText(/modda tahmin yok/).waitFor({ state: 'detached', timeout: 15000 })
+      check(true, '5. kişi gelince not kalkar')
+    }
   }
   everyone = [admin, ...players]
   await admin.page.getByText('Başlatınca yeni kimse katılamaz').waitFor({ timeout: 15000 })
@@ -139,6 +150,7 @@ try {
   for (const p of everyone) await p.page.getByRole('button', { name: 'Hazırım' }).click()
   await Promise.all(everyone.map((p) => p.page.getByRole('heading', { name: 'Bu kim?' }).waitFor({ timeout: 20000 })))
   check(true, 'son "Hazırım"dan sonra herkes açılışta', `${Date.now() - tReady} ms`)
+  check((await admin.page.getByRole('region', { name: 'Ara skor' }).count()) === 1, '6 kişi Klasik: tahminli, ara skor görünür')
   await shot(players[0], 'c01-tahmin-mobil')
   await shot(admin, 'c02-tahmin-admin')
 
@@ -148,6 +160,16 @@ try {
     console.log(`== Hücre ${pos + 1}`)
     const header = await players[0].page.getByText(/^Açılış · /).innerText()
     check(header.includes(`${pos + 1}/6`), `sıra ${pos + 1}/6`, header)
+    if (pos === total - 1) {
+      await Promise.all(
+        everyone.filter((p) => !p.closed).map((p) => p.page.getByText('Son kişi: tek aday kaldığı için tahmin yok.').waitFor({ timeout: 10000 })),
+      )
+      check(true, 'son hücre tahminsiz, doğrudan açık ("Son kişi")')
+      check((await players[0].page.getByRole('region', { name: 'Tahminin' }).count()) === 0, 'son hücrede tahmin paneli yok')
+      await shot(players[0], 'c05b-son-kisi-mobil')
+      await current.page.getByRole('button', { name: 'Sonuçları göster', exact: true }).click()
+      break
+    }
 
     // Tahmin edebilenler bir aday seçer; ilk oyuncu seçimini bir kez değiştirir.
     let guessed = 0
@@ -230,15 +252,14 @@ try {
       current = next
     }
 
-    const last = pos === total - 1
-    await current.page.getByRole('button', { name: last ? 'Sonuçları göster' : 'Sıradaki', exact: true }).click()
-    if (!last) {
-      await players[0].page.getByText(new RegExp(`^Açılış · ${pos + 2}/6$`)).waitFor({ timeout: 10000 })
-    }
+    await current.page.getByRole('button', { name: 'Sıradaki', exact: true }).click()
+    await players[0].page.getByText(new RegExp(`^Açılış · ${pos + 2}/6$`)).waitFor({ timeout: 10000 })
   }
 
   console.log('== BITTI')
   const live = everyone.filter((p) => !p.closed)
+  // Devirden sonra admin bir oyuncu olabilir; denetimler admin olmayan bir oyuncuyla.
+  const viewer = players.find((p) => p !== current && !p.closed)
   await Promise.all(live.map((p) => p.page.getByRole('heading', { name: 'Skor tablosu' }).waitFor({ timeout: 15000 })))
   check(true, 'herkes sonuç ekranında')
   const note = await players[0].page.getByText(/Bu oda \d+ dakika sonra silinir\./).innerText()
@@ -246,7 +267,7 @@ try {
   const rows = await players[0].page.getByRole('region', { name: 'Skor tablosu' }).getByRole('listitem').count()
   check(rows === 6, 'skor tablosunda 6 satır', String(rows))
   check((await players[0].page.getByText(everyone.hiddenText, { exact: true }).count()) === 0, 'gizlenen madde sonuç pusulasında yok')
-  check((await players[0].page.getByRole('button', { name: 'Odayı şimdi sil' }).count()) === 0, 'oyuncuda "Odayı şimdi sil" yok')
+  check((await viewer.page.getByRole('button', { name: 'Odayı şimdi sil' }).count()) === 0, 'oyuncuda "Odayı şimdi sil" yok')
   await shot(players[0], 'c06-sonuc-mobil')
   await shot(current, 'c07-sonuc-admin')
 
@@ -262,7 +283,7 @@ try {
   if (SHOTS) writeFileSync(join(SHOTS, 'c08-canli-oda.png'), buf)
 
   console.log('   Düzenleyiciye aktar')
-  const imp = players[3]
+  const imp = players.find((p) => p !== current && p !== viewer && !p.closed)
   await imp.page.getByRole('button', { name: 'Düzenleyiciye aktar' }).click()
   await imp.page.getByRole('dialog', { name: 'Düzenleyiciye aktarılsın mı?' }).getByRole('button', { name: 'Aktar' }).click()
   await imp.page.waitForURL(`${BASE}/`, { timeout: 20000 })
@@ -278,7 +299,7 @@ try {
   await current.page.getByRole('button', { name: 'Odayı şimdi sil' }).click()
   await current.page.getByRole('dialog', { name: 'Oda şimdi silinsin mi?' }).getByRole('button', { name: 'Sil' }).click()
   await current.page.getByRole('heading', { name: 'Oda silindi' }).waitFor({ timeout: 10000 })
-  await players[0].page.getByRole('heading', { name: 'Bu oda artık yok' }).waitFor({ timeout: 15000 })
+  await viewer.page.getByRole('heading', { name: 'Bu oda artık yok' }).waitFor({ timeout: 15000 })
   check(true, 'oda silindi; diğerleri "Bu oda artık yok" görür')
   code = null
 } finally {
