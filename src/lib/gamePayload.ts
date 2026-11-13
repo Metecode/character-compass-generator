@@ -5,7 +5,7 @@
  * Sunucu tarafındaki doğrulama: supabase/functions/_shared/validate.ts
  */
 
-import { GAME_MIN_CELLS } from '../constants'
+import { CREATOR_NAME_MAX, GAME_MIN_CELLS } from '../constants'
 import type { Cell, Compass } from '../types'
 import { regionsOf } from './grid'
 
@@ -22,6 +22,8 @@ export interface GamePayload {
   title: string
   gridSize: Compass['gridSize']
   duration: number
+  /** Oyunu kuranın adı; boşsa gönderilmez. */
+  creatorName?: string
   regions: { color: string; label?: string }[]
   cells: GamePayloadCell[]
 }
@@ -46,12 +48,22 @@ const clean = (s: string): string => s.replace(/[\u0000-\u001f\u007f]+/g, ' ')
 const truncate = (s: string, max: number): string => Array.from(s).slice(0, max).join('')
 
 /**
+ * Kurucu adı: boşluklar sadeleşir, en fazla 20 karakter. Boşsa null
+ * (sunucudaki parseCreatorName ile aynı kurallar).
+ */
+export function cleanCreatorName(v: string): string | null {
+  const name = truncate(clean(v).trim().replace(/\s+/g, ' '), CREATOR_NAME_MAX).trim()
+  return name === '' ? null : name
+}
+
+/**
  * @returns payload ve foto sırası: `photoIds[i]`, `photo_i` alanında gönderilecek
  *          yerel foto kimliği.
  */
 export function buildGamePayload(
   compass: Compass,
   duration: number,
+  creatorName = '',
 ): { payload: GamePayload; photoIds: string[] } {
   const photoIds: string[] = []
   const cells = compass.cells.map((c): GamePayloadCell => {
@@ -70,11 +82,13 @@ export function buildGamePayload(
     const label = r.label ? clean(r.label).trim() : ''
     return label ? { color: r.color, label } : { color: r.color }
   })
+  const creator = cleanCreatorName(creatorName)
   return {
     payload: {
       title: truncate(clean(compass.title).trim(), GAME_TITLE_MAX),
       gridSize: compass.gridSize,
       duration,
+      ...(creator ? { creatorName: creator } : {}),
       regions,
       cells,
     },

@@ -3,6 +3,7 @@ import { validateGame } from '../../../supabase/functions/_shared/validate.ts'
 import { createDefaultCompass } from '../grid'
 import {
   buildGamePayload,
+  cleanCreatorName,
   countPlayableCells,
   dropMissingPhotos,
   gameBlockReason,
@@ -32,7 +33,28 @@ describe('oyun linki ön koşulu', () => {
   })
 })
 
+describe('cleanCreatorName', () => {
+  it('boşlukları sadeleştirir, boşsa null', () => {
+    expect(cleanCreatorName('  Ayşe   Nur ')).toBe('Ayşe Nur')
+    expect(cleanCreatorName('   ')).toBeNull()
+    expect(cleanCreatorName('')).toBeNull()
+  })
+  it('20 karakterde keser, kontrol karakterlerini atar', () => {
+    expect(cleanCreatorName('a'.repeat(25))).toBe('a'.repeat(20))
+    expect(cleanCreatorName('Ali	Veli')).toBe('Ali Veli')
+  })
+})
+
 describe('buildGamePayload', () => {
+  it('kurucu adı yalnızca doluysa gönderilir ve sunucudan geçer', () => {
+    expect(buildGamePayload(compassWith(4), 24).payload).not.toHaveProperty('creatorName')
+    expect(buildGamePayload(compassWith(4), 24, '  ').payload).not.toHaveProperty('creatorName')
+    const { payload } = buildGamePayload(compassWith(4, 2), 24, ' Mete ')
+    expect(payload.creatorName).toBe('Mete')
+    const r = validateGame({ ...payload, cells: payload.cells.map((c) => ({ ...c, photo: null })) }, [])
+    expect(r.ok && r.value.creatorName).toBe('Mete')
+  })
+
   it('fotoları sırayla photo_N alanlarına eşler ve boş maddeleri atar', () => {
     const { payload, photoIds } = buildGamePayload(compassWith(4), 24)
     expect(photoIds).toEqual(['p1', 'p3'])

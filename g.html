@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#fff8ec" />
+    <!--
+      /g/* oyun linklerinin girişi: index.html ile aynı uygulamayı yükler, yalnızca
+      sosyal önizleme etiketleri farklıdır (WhatsApp vb. JS çalıştırmaz, bunları
+      sunucudan gelen HTML'den okur). Netlify: public/_redirects → /g/* → /g.html.
+      og:url bilinçli olarak yok: önizleme her oyunun kendi adresine bağlı kalsın.
+    -->
+    <title>Bu kim? Tahmin et · Character Compass</title>
+    <meta name="robots" content="noindex, nofollow" />
+    <meta
+      name="description"
+      content="Arkadaşların seni davet etti. Maddelere bak, kimin kim olduğunu bul. Bakalım kaç saniyede çözeceksin."
+    />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Character Compass" />
+    <meta property="og:locale" content="tr_TR" />
+    <meta property="og:title" content="Bu kim? Tahmin et" />
+    <meta
+      property="og:description"
+      content="Arkadaşların seni davet etti. Maddelere bak, kimin kim olduğunu bul. Bakalım kaç saniyede çözeceksin."
+    />
+    <meta property="og:image" content="https://compass.meteucar.com/og-game.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="İsimleri ve fotoğrafları soru işaretiyle kapalı bir karakter pusulası, yanında “Bu kim?” yazısı." />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Bu kim? Tahmin et" />
+    <meta
+      name="twitter:description"
+      content="Arkadaşların seni davet etti. Maddelere bak, kimin kim olduğunu bul. Bakalım kaç saniyede çözeceksin."
+    />
+    <meta name="twitter:image" content="https://compass.meteucar.com/og-game.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

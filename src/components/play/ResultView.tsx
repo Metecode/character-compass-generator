@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { canShareFiles, downloadBlob, fileNameFor, renderNodePng } from '../../lib/exportPng'
+import { copyText, scoreMessage } from '../../lib/gameLink'
 import { formatDuration, scoreLabel } from '../../lib/play'
 import type { PlayedResult } from '../../lib/playApi'
 import { PlayBoard } from './PlayBoard'
@@ -16,9 +17,11 @@ interface Props {
   result: PlayedResult
   /** Hücreler sırayla açılsın mı (yeni gönderildiyse evet; linki yeniden açınca hayır). */
   animate: boolean
+  /** Oyunun linki; skor paylaşımındaki davete eklenir. */
+  url: string
 }
 
-export function ResultView({ result, animate }: Props) {
+export function ResultView({ result, animate, url }: Props) {
   const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const coarse = useMediaQuery('(pointer: coarse)')
   // Açılış sırası: okuma sırasıyla içi dolu hücreler.
@@ -42,6 +45,11 @@ export function ResultView({ result, animate }: Props) {
   // Skor kartı: yalnızca paylaşırken ekran dışında çizilir.
   const [sharing, setSharing] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
+  const [shareNote, setShareNote] = useState<string | null>(null)
+  const message = useMemo(
+    () => scoreMessage({ points2, total, durationSeconds: result.durationSeconds }, url),
+    [points2, total, result.durationSeconds, url],
+  )
   const cardRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -55,15 +63,24 @@ export function ResultView({ result, animate }: Props) {
         const blob = await renderNodePng(node)
         if (cancelled) return
         const name = `skor-${fileNameFor(result.title || 'pusula')}`
+        // Görsel + metin + link birlikte; metni atan uygulamalar için görselin
+        // üzerinde de site adresi ve çağrı var (ScoreCard).
+        const fallback = async () => {
+          downloadBlob(blob, name)
+          const copied = await copyText(message.copy)
+          if (!cancelled) {
+            setShareNote(copied ? 'Skor kartı indirildi, mesaj panoya kopyalandı.' : 'Skor kartı indirildi.')
+          }
+        }
         if (coarse && canShareFiles()) {
           const file = new File([blob], name, { type: 'image/png' })
           try {
-            await navigator.share({ files: [file], title: `${label} bildim!` })
+            await navigator.share({ files: [file], title: `${label} bildim!`, text: message.text, url })
           } catch (e) {
-            if (!(e instanceof DOMException && e.name === 'AbortError')) downloadBlob(blob, name)
+            if (!(e instanceof DOMException && e.name === 'AbortError')) await fallback()
           }
         } else {
-          downloadBlob(blob, name)
+          await fallback()
         }
       } catch {
         if (!cancelled) setShareError('Skor kartı oluşturulamadı. Tekrar dener misin?')
@@ -74,7 +91,7 @@ export function ResultView({ result, animate }: Props) {
     return () => {
       cancelled = true
     }
-  }, [sharing, coarse, label, result.title])
+  }, [sharing, coarse, label, result.title, message, url])
 
   return (
     <div className="flex flex-col gap-5">
@@ -131,7 +148,11 @@ export function ResultView({ result, animate }: Props) {
       />
 
       <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn btn-primary" onClick={() => setSharing(true)} disabled={sharing} aria-busy={sharing}>
+        <button type="button" className="btn btn-primary" onClick={() => {
+            setShareError(null)
+            setShareNote(null)
+            setSharing(true)
+          }} disabled={sharing} aria-busy={sharing}>
           {sharing ? (
             <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
           ) : (
@@ -144,6 +165,11 @@ export function ResultView({ result, animate }: Props) {
           Kendi pusulanı yap
         </a>
       </div>
+      {shareNote && (
+        <p role="status" className="text-sm font-bold">
+          {shareNote}
+        </p>
+      )}
       {shareError && (
         <p role="alert" className="text-sm font-bold text-danger">
           {shareError}

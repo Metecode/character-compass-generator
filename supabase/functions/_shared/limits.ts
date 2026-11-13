@@ -8,6 +8,8 @@ export const NAME_MAX = 20
 export const BULLET_MAX = 40
 export const BULLETS_MAX = 3
 export const LABEL_MAX = 24
+/** Oyunu kuranın adı (isteğe bağlı; oyuncu adıyla aynı kurallar). */
+export const CREATOR_NAME_MAX = NAME_MAX
 /** Oyun başlığı (ön yüzdeki TITLE_MAX'tan geniş; sunucu üst sınırı). */
 export const GAME_TITLE_MAX = 60
 

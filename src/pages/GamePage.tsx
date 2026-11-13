@@ -3,6 +3,7 @@ import { useCallback, useEffect, useId, useState } from 'react'
 import { PLAYER_NAME_MAX } from '../constants'
 import { PlayView } from '../components/play/PlayView'
 import { ResultView } from '../components/play/ResultView'
+import { gameUrl } from '../lib/gameLink'
 import { classifyPlayError, cleanPlayerName, deviceId, loadDraft, saveDraft } from '../lib/play'
 import { GameApiError, getGame, type OpenGame, type PlayedResult } from '../lib/playApi'
 import { PageShell } from './PageShell'
@@ -14,7 +15,7 @@ type View =
   | { kind: 'loading' }
   | { kind: 'gone' }
   | { kind: 'error'; message: string; retry: boolean }
-  | { kind: 'open'; game: OpenGame; hints: Record<number, string> }
+  | { kind: 'open'; game: OpenGame; hints: Record<number, string>; players: number | null }
   | { kind: 'played'; result: PlayedResult; animate: boolean }
 
 const codeFromPath = (path: string) => /^\/g\/([^/]+)\/?$/.exec(path)?.[1] ?? ''
@@ -33,7 +34,7 @@ async function fetchView(code: string): Promise<View> {
     const state = await getGame(code, deviceId())
     return state.status === 'played'
       ? { kind: 'played', result: state.result, animate: false }
-      : { kind: 'open', game: state.game, hints: state.hints }
+      : { kind: 'open', game: state.game, hints: state.hints, players: state.players ?? null }
   } catch (e) {
     const { kind, message } = classifyPlayError(e instanceof GameApiError ? e.code : undefined)
     return kind === 'gone' ? { kind: 'gone' } : { kind: 'error', message, retry: true }
@@ -95,7 +96,9 @@ export default function GamePage() {
         (player === null || editingName ? (
           <NameStep
             title={view.game.title}
+            creatorName={view.game.creatorName ?? null}
             people={view.game.names.length}
+            players={view.players}
             initial={player ?? lastName()}
             onDone={(name) => {
               setPlayer(name)
@@ -122,7 +125,7 @@ export default function GamePage() {
           />
         ))}
 
-      {view.kind === 'played' && <ResultView result={view.result} animate={view.animate} />}
+      {view.kind === 'played' && <ResultView result={view.result} animate={view.animate} url={gameUrl(code)} />}
     </PageShell>
   )
 }
@@ -147,12 +150,17 @@ function GoneCard() {
 
 function NameStep({
   title,
+  creatorName,
   people,
+  players,
   initial,
   onDone,
 }: {
   title: string
+  creatorName: string | null
   people: number
+  /** Şimdiye kadar oynayan; eski sunucuda bilinmiyorsa null. */
+  players: number | null
   initial: string
   onDone: (name: string) => void
 }) {
@@ -172,12 +180,21 @@ function NameStep({
       }}
     >
       <div>
-        <p className="text-sm font-bold text-muted">Bu kim? oyunu</p>
-        <h1 className="text-2xl font-black tracking-tight">{title || 'Karakter pusulası'}</h1>
-        <p className="mt-2 text-sm">
-          {people} kişinin maddeleri açık, fotoğrafları ve isimleri kapalı. Kim kim, sen bul. Her cihaz bir
-          kez oynayabilir.
+        <h1 className="text-2xl leading-tight font-black tracking-tight text-balance">
+          {creatorName ? (
+            <>
+              <span className="bg-accent px-1">{creatorName}</span> seni challenge'a davet etti
+            </>
+          ) : (
+            'Bu kim?'
+          )}
+        </h1>
+        <p className="mt-2">Maddelere bak, her hücreye doğru ismi yerleştir. Süre tutuluyor.</p>
+        <p className="mt-3 text-sm font-bold text-muted">
+          {title || 'Karakter pusulası'} · {people} kişilik pusula
+          {players !== null && <> · {players === 0 ? 'henüz kimse oynamadı' : `${players} kişi oynadı`}</>}
         </p>
+        <p className="mt-1 text-xs text-muted">Her cihaz bir kez oynayabilir.</p>
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor={id} className="text-sm font-black tracking-wide uppercase">

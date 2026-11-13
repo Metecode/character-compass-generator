@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { blurFieldIndex, parseDuration, photoFieldIndex, validateBlur, validateGame } from '../validate.ts'
+import { blurFieldIndex, parseCreatorName, parseDuration, photoFieldIndex, validateBlur, validateGame } from '../validate.ts'
 import { emptyCell, fakeJpeg, filledCell, payload, photosFor } from './fixtures.ts'
 
 const errorOf = (data: unknown, photos = photosFor(0, 1)) => {
@@ -86,6 +86,32 @@ describe('validateGame: hücre limitleri', () => {
   it('isim ve en az bir maddesi olan en az 4 hücre ister', () => {
     expect(errorOf(withCell({ name: 'Sadece isim', bullets: [] }), photosFor(1))).toBe('not_enough_cells')
     expect(errorOf(withCell({ name: '  ', bullets: ['madde'] }), photosFor(1))).toBe('not_enough_cells')
+  })
+})
+
+describe('validateGame: kurucu adı', () => {
+  it('verilmezse null (eski istemciler)', () => {
+    const r = validateGame(payload(), photosFor(0, 1))
+    expect(r.ok && r.value.creatorName).toBeNull()
+  })
+
+  it('boşlukları sadeleştirip saklar', () => {
+    const r = validateGame(payload({ creatorName: '  Ayşe   Nur ' }), photosFor(0, 1))
+    expect(r.ok && r.value.creatorName).toBe('Ayşe Nur')
+  })
+
+  it.each([null, '', '   '])('%j → null', (v) => {
+    expect(parseCreatorName(v)).toEqual({ ok: true, value: null })
+  })
+
+  it('20 karakter (emoji tek sayılır) sınırı', () => {
+    expect(parseCreatorName('ğ'.repeat(20)).ok).toBe(true)
+    expect(parseCreatorName('😀'.repeat(20)).ok).toBe(true)
+    expect(parseCreatorName('a'.repeat(21))).toEqual({ ok: false, error: 'invalid_creator' })
+  })
+
+  it.each([42, ['Ali'], { a: 1 }, 'Ali\nVeli', 'Ali\tVeli'])('%j geçersiz', (creatorName) => {
+    expect(errorOf(payload({ creatorName }))).toBe('invalid_creator')
   })
 })
 

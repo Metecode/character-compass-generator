@@ -24,6 +24,8 @@ export interface StoredRegion {
 
 export interface StoredGame {
   title: string
+  /** Oyunu kuranın adı; eski oyunlarda yok ya da null. */
+  creator_name?: string | null
   grid_size: number
   regions: StoredRegion[]
   cells: StoredCell[]
@@ -40,6 +42,8 @@ export interface PublicCell {
 
 export interface PublicGame {
   title: string
+  /** Oyunu kuranın adı; verilmediyse null. */
+  creatorName: string | null
   gridSize: number
   regions: StoredRegion[]
   cells: PublicCell[]
@@ -129,7 +133,14 @@ export function publicGame(
     game.cells.filter(isPlayable).map((c) => c.name.trim()),
     randomInt,
   )
-  return { title: game.title, gridSize: game.grid_size, regions: game.regions, cells, names }
+  return {
+    title: game.title,
+    creatorName: game.creator_name ?? null,
+    gridSize: game.grid_size,
+    regions: game.regions,
+    cells,
+    names,
+  }
 }
 
 // ---------------------------------------------------------------------------

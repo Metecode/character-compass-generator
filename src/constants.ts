@@ -65,6 +65,10 @@ export const GAME_DEFAULT_DURATION_HOURS = 24
 export const GAME_MIN_CELLS = 4
 /** Sunucuya gönderilen her foto en fazla bu boyutta olabilir. */
 export const GAME_PHOTO_MAX_BYTES = 150 * 1024
+/** Oyunu kuranın adı (isteğe bağlı, davet metninde görünür). */
+export const CREATOR_NAME_MAX = 20
+/** Kurucu adı bu cihazda hatırlanır. */
+export const CREATOR_NAME_KEY = 'compass-creator-name'
 /** Oyunlarım listesi (cihazda; delete_token burada durur). */
 export const GAMES_STORAGE_KEY = 'compass-games'
 

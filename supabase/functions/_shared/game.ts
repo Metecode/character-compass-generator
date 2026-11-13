@@ -55,7 +55,7 @@ export async function readJson(
 export async function loadLiveGame(db: SupabaseClient, code: string): Promise<LiveGame | null> {
   const { data, error } = await db
     .from('games')
-    .select('code, title, grid_size, regions, cells, expires_at, delete_token_hash')
+    .select('code, title, creator_name, grid_size, regions, cells, expires_at, delete_token_hash')
     .eq('code', code)
     .gt('expires_at', new Date().toISOString())
     .maybeSingle()
@@ -103,6 +103,16 @@ export async function guessesOf(db: SupabaseClient, code: string): Promise<Guess
     .order('created_at', { ascending: true })
   if (error) throw new Error('guess lookup failed')
   return (data ?? []) as GuessRow[]
+}
+
+/** Bu oyunda kaç kişi tahmin gönderdi (yalnızca sayı). */
+export async function guessCountOf(db: SupabaseClient, code: string): Promise<number> {
+  const { count, error } = await db
+    .from('guesses')
+    .select('id', { count: 'exact', head: true })
+    .eq('game_code', code)
+  if (error) throw new Error('guess count failed')
+  return count ?? 0
 }
 
 /** Dosyanın baytları → base64 (bulanık ipucu, ≤ 5 KB). */

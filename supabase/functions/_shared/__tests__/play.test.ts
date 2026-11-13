@@ -131,6 +131,11 @@ describe('publicGame (kopya önleme)', () => {
     expect(pub.cells.every((c) => Object.keys(c).sort().join() === 'bullets,hint,playable')).toBe(true)
     expect(JSON.stringify(pub)).not.toMatch(/photo|path|p1/)
   })
+  it('kurucu adı: eski oyunda null, varsa olduğu gibi', () => {
+    expect(pub.creatorName).toBeNull()
+    expect(publicGame({ ...game, creator_name: null }, new Set()).creatorName).toBeNull()
+    expect(publicGame({ ...game, creator_name: 'Mete' }, new Set()).creatorName).toBe('Mete')
+  })
   it('ipucu yalnızca bulanık dosyası olan oynanabilir hücrede', () => {
     expect(pub.cells.map((c) => c.hint)).toEqual([true, false, false, false])
     expect(pub.cells.map((c) => c.playable)).toEqual([true, true, false, true])

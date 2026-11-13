@@ -23,6 +23,7 @@ describe('sunucu limitleri ön yüzle aynı', () => {
 
   it('tahmin oyunu sınırları', () => {
     expect(server.PLAYER_NAME_MAX).toBe(client.PLAYER_NAME_MAX)
+    expect(server.CREATOR_NAME_MAX).toBe(client.CREATOR_NAME_MAX)
     expect(server.BLUR_SIZE).toBe(client.BLUR_SIZE)
     expect(server.BLUR_MAX_BYTES).toBe(client.BLUR_MAX_BYTES)
     expect(server.GUESSES_MAX).toBe(200)

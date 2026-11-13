@@ -9,7 +9,7 @@
  *              Yalnızca photo_N varsa kabul edilir; hiç gönderilmezse oyunda ipucu olmaz.
  *
  * GamePayload:
- *   { title?: string, gridSize: 2|3|4, duration?: 1|24|72,
+ *   { title?: string, gridSize: 2|3|4, duration?: 1|24|72, creatorName?: string,
  *     regions: [{ color: '#RRGGBB', label?: string }],
  *     cells: [{ name: string, bullets: string[], photo?: number | null }] }
  */
@@ -20,6 +20,7 @@ import {
   BLUR_SIZE,
   BULLET_MAX,
   BULLETS_MAX,
+  CREATOR_NAME_MAX,
   DEFAULT_DURATION_HOURS,
   DURATIONS_HOURS,
   GAME_TITLE_MAX,
@@ -37,6 +38,7 @@ import {
 export type ValidationError =
   | 'invalid_payload'
   | 'invalid_title'
+  | 'invalid_creator'
   | 'invalid_grid'
   | 'invalid_duration'
   | 'invalid_regions'
@@ -69,6 +71,8 @@ export interface ValidCell {
 
 export interface ValidGame {
   title: string
+  /** Oyunu kuranın adı; verilmediyse (eski istemciler) null. */
+  creatorName: string | null
   gridSize: GridSize
   durationHours: DurationHours
   regions: ValidRegion[]
@@ -102,6 +106,19 @@ export function parseDuration(v: unknown): Result<DurationHours> {
     return { ok: true, value: v as DurationHours }
   }
   return fail('invalid_duration')
+}
+
+/**
+ * Kurucu adı: isteğe bağlı. Oyuncu adıyla aynı kurallar (kontrol karakteri yok,
+ * boşluklar sadeleşir, en fazla 20 karakter). Boş ya da yalnızca boşluk → null.
+ */
+export function parseCreatorName(v: unknown): Result<string | null> {
+  if (v === undefined || v === null) return { ok: true, value: null }
+  if (!isCleanText(v)) return fail('invalid_creator')
+  const name = v.trim().replace(/\s+/g, ' ')
+  if (name === '') return { ok: true, value: null }
+  if (textLength(name) > CREATOR_NAME_MAX) return fail('invalid_creator')
+  return { ok: true, value: name }
 }
 
 /** "photo_0" … "photo_15" → 0 … 15. Başka alan adı null döner. */
@@ -194,6 +211,9 @@ export function validateGame(
   const title = data.title === undefined ? '' : data.title
   if (!isCleanText(title) || textLength(title) > GAME_TITLE_MAX) return fail('invalid_title')
 
+  const creatorName = parseCreatorName(data.creatorName)
+  if (!creatorName.ok) return creatorName
+
   const gridSize = data.gridSize
   if (typeof gridSize !== 'number' || !(GRID_SIZES as readonly number[]).includes(gridSize)) {
     return fail('invalid_grid')
@@ -254,6 +274,7 @@ export function validateGame(
     ok: true,
     value: {
       title: title.trim(),
+      creatorName: creatorName.value,
       gridSize: size,
       durationHours: duration.value,
       regions: regions.value,

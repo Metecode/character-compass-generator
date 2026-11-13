@@ -59,7 +59,7 @@ export const ScoreCard = forwardRef<HTMLDivElement, Props>(function ScoreCard({ 
       </div>
 
       <div className="mt-12 flex items-center justify-between gap-6">
-        <p className="text-[36px] leading-tight font-bold whitespace-nowrap">Sen kaçını bilirsin?</p>
+        <p className="text-[36px] leading-tight font-bold whitespace-nowrap">Sen kaç yaparsın?</p>
         <p className="rounded-xl border-[5px] border-ink bg-surface px-6 py-3 text-[40px] font-black whitespace-nowrap shadow-[8px_8px_0_0_#121212]">
           {SITE_URL}
         </p>

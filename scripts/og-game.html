@@ -1,0 +1,224 @@
+<!doctype html>
+<!--
+  public/og-game.png kaynağı (1200×630, /g/* oyun linklerinin sosyal önizlemesi).
+  Gerçek kişi adı ya da fotoğrafı yok: isimler ve fotolar soru işaretiyle kapalı.
+
+  Yeniden üretmek için (proje kökünden, Chrome kurulu olmalı):
+    pnpm og:game
+-->
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @font-face {
+        font-family: Archivo;
+        font-weight: 500;
+        src: url('../node_modules/@fontsource/archivo/files/archivo-latin-ext-500-normal.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: Archivo;
+        font-weight: 700;
+        src: url('../node_modules/@fontsource/archivo/files/archivo-latin-ext-700-normal.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: Archivo;
+        font-weight: 900;
+        src: url('../node_modules/@fontsource/archivo/files/archivo-latin-ext-900-normal.woff2') format('woff2');
+      }
+
+      :root {
+        --ink: #121212;
+        --paper: #fff8ec;
+        --accent: #ffd23f;
+        --muted: #6b6257;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      html,
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+      }
+      body {
+        position: relative;
+        font-family: Archivo, sans-serif;
+        color: var(--ink);
+        background: var(--paper);
+        background-image: radial-gradient(rgb(18 18 18 / 0.13) 1.5px, transparent 1.5px);
+        background-size: 20px 20px;
+      }
+
+      /* Sol: başlık */
+      .left {
+        position: absolute;
+        left: 64px;
+        top: 64px;
+        width: 500px;
+      }
+      .badge {
+        display: flex;
+        width: 76px;
+        height: 76px;
+        align-items: center;
+        justify-content: center;
+        border: 4px solid var(--ink);
+        border-radius: 16px;
+        background: var(--accent);
+        box-shadow: 6px 6px 0 0 var(--ink);
+      }
+      .kicker {
+        margin-top: 34px;
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      h1 {
+        margin-top: 2px;
+        font-size: 112px;
+        line-height: 1;
+        font-weight: 900;
+        letter-spacing: -0.045em;
+        white-space: nowrap;
+      }
+      h1 .q {
+        display: inline-block;
+        margin-left: 10px;
+        padding: 0 18px 4px;
+        border: 5px solid var(--ink);
+        border-radius: 18px;
+        background: var(--accent);
+        box-shadow: 7px 7px 0 0 var(--ink);
+        line-height: 1;
+        transform: rotate(4deg);
+      }
+      .sub {
+        margin-top: 40px;
+        font-size: 27px;
+        line-height: 1.25;
+        font-weight: 700;
+      }
+      .url {
+        display: inline-block;
+        margin-top: 34px;
+        padding: 10px 18px;
+        border: 4px solid var(--ink);
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 6px 6px 0 0 var(--ink);
+        font-size: 26px;
+        font-weight: 700;
+      }
+
+      /* Sağ: kapalı pusula */
+      .grid {
+        position: absolute;
+        left: 606px;
+        top: 46px;
+        width: 536px;
+        height: 536px;
+        display: grid;
+        grid-template-columns: 44px repeat(3, 1fr);
+        grid-template-rows: repeat(3, 1fr);
+        border: 5px solid var(--ink);
+        background: var(--ink);
+        gap: 2px;
+        box-shadow: 10px 10px 0 0 var(--ink);
+      }
+      .band {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        writing-mode: vertical-rl;
+        transform: rotate(180deg);
+        font-size: 14px;
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+      }
+      .cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 10px;
+      }
+      .row-0 {
+        background: #caffbf;
+      }
+      .row-1 {
+        background: #fdffb6;
+      }
+      .row-2 {
+        background: #ffadad;
+      }
+      .avatar {
+        display: flex;
+        width: 62px;
+        height: 62px;
+        align-items: center;
+        justify-content: center;
+        border: 3px solid var(--ink);
+        border-radius: 50%;
+        background: #fff;
+        font-size: 36px;
+        font-weight: 900;
+      }
+      .name {
+        display: flex;
+        height: 24px;
+        min-width: 86px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 10px;
+        border: 2.5px dashed var(--ink);
+        border-radius: 8px;
+        background: rgb(255 255 255 / 0.7);
+        font-size: 17px;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+      }
+      .bullets {
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.3;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="left">
+      <div class="badge" aria-hidden="true">
+        <svg width="40" height="40" viewBox="0 0 40 40">
+          <polygon points="20,3 26,20 14,20" fill="#e5484d" stroke="#121212" stroke-width="2.5" stroke-linejoin="round" />
+          <polygon points="20,37 14,20 26,20" fill="#fff" stroke="#121212" stroke-width="2.5" stroke-linejoin="round" />
+          <circle cx="20" cy="20" r="2.5" fill="#121212" />
+        </svg>
+      </div>
+      <p class="kicker">Arkadaşların seni davet etti</p>
+      <h1>Bu kim<span class="q">?</span></h1>
+      <p class="sub">Maddelere bak, kimin kim olduğunu<br />bul. Süre tutuluyor.</p>
+      <p class="url">compass.meteucar.com</p>
+    </div>
+
+    <div class="grid" aria-hidden="true">
+      <div class="band row-0">GRUBUN YILDIZLARI</div>
+      <div class="cell row-0"><div class="avatar">?</div><div class="name">???</div><p class="bullets">• Kaos ajanı<br />• Ortam adamı</p></div>
+      <div class="cell row-0"><div class="avatar">?</div><div class="name">???</div><p class="bullets">• Grubun annesi<br />• Hep erken gelir</p></div>
+      <div class="cell row-0"><div class="avatar">?</div><div class="name">???</div><p class="bullets">• Gece kuşu<br />• Plan bozan</p></div>
+
+      <div class="band row-1">SAĞLAM KADRO</div>
+      <div class="cell row-1"><div class="avatar">?</div><div class="name">???</div><p class="bullets">• Laf ebesi<br />• Kriz yöneticisi</p></div>
+      <div class="cell row-1"><div class="avatar">?</div><div class="name">???</div><p class="bullets">• Profesyonel erteleyici</p></div>
+      <div class="cell row-1"><div class="avatar">?</div><div class="name">???</div><p class="bullets">• Fikir fabrikası<br />• Sosyal kelebek</p></div>
+
+      <div class="band row-2">SÜRPRİZ PAKETLER</div>
+      <div class="cell row-2"><div class="avatar">?</div><div class="name">???</div><p class="bullets">• Hesap gelince<br />tuvalete gider</p></div>
+      <div class="cell row-2"><div class="avatar">?</div><div class="name">???</div><p class="bullets">• Gizli lider<br />• Ukala ama haklı</p></div>
+      <div class="cell row-2"><div class="avatar">?</div><div class="name">???</div><p class="bullets">• Komplo teorisyeni</p></div>
+    </div>
+  </body>
+</html>

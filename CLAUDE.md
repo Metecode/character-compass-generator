@@ -29,6 +29,9 @@ pnpm + Node 22.20.0 (`.nvmrc`).
   Doğrulama `supabase/functions/_shared/` içinde saf TS'dir ve vitest ile test edilir;
   sunucu limitleri `_shared/limits.ts`'te kopya durur, `limits.test.ts` `src/constants.ts` ile eşleştirir.
   Oyunlarım listesi ve delete_token `compass-games` anahtarında (`src/store/gamesStore.ts`), pusula şemasından ayrı.
+- `/g/*` linkleri `g.html` girişinden açılır (aynı `src/main.tsx`, yalnızca og/twitter etiketleri
+  farklı; `public/_redirects`'te genel kuraldan önce). Önizleme görseli `public/og-game.png`,
+  kaynağı `scripts/og-game.html` → `pnpm og:game`. `index.html`'in etiketleri ana sayfanındır.
 - Pusula her zaman 1080×1080 çizilir ve ekrana ölçeklenir; PNG, aynı DOM'dan
   `src/lib/exportPng.ts` ile alınır (fontlar ve fotolar beklenir, `.editor-only` öğeler çıkarılır).
 

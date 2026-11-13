@@ -23,6 +23,8 @@ export interface PublicCell {
 
 export interface OpenGame {
   title: string
+  /** Oyunu kuranın adı; eski oyunlarda yok ya da null. */
+  creatorName?: string | null
   gridSize: 2 | 3 | 4
   regions: Region[]
   cells: PublicCell[]
@@ -59,7 +61,14 @@ export interface PlayedResult {
 }
 
 export type GameState =
-  | { status: 'open'; game: OpenGame; hints: Record<number, string>; expiresAt: string }
+  | {
+      status: 'open'
+      game: OpenGame
+      hints: Record<number, string>
+      /** Şimdiye kadar tahmin gönderen kişi sayısı; eski sunucuda yok. */
+      players?: number
+      expiresAt: string
+    }
   | { status: 'played'; result: PlayedResult }
 
 const json = (body: unknown) => JSON.stringify(body)

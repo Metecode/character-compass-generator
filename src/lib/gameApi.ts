@@ -87,9 +87,13 @@ export async function makeBlur(photo: Blob): Promise<Blob | null> {
   }
 }
 
-export async function createGame(compass: Compass, durationHours: number): Promise<CreatedGame> {
+export async function createGame(
+  compass: Compass,
+  durationHours: number,
+  creatorName = '',
+): Promise<CreatedGame> {
   config() // yapılandırma yoksa fotoları hiç okumadan dur
-  const built = buildGamePayload(compass, durationHours)
+  const built = buildGamePayload(compass, durationHours, creatorName)
 
   const blobs = new Map<string, Blob>()
   for (const id of built.photoIds) {

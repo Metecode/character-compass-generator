@@ -2,7 +2,8 @@
  * POST /functions/v1/get-game  (JSON, apikey: publishable)
  * Gövde: { code, device }
  *
- * Bu cihaz henüz tahmin göndermediyse oyuncuya giden veri: başlık, ızgara,
+ * Bu cihaz henüz tahmin göndermediyse oyuncuya giden veri: başlık, kurucu adı
+ * (varsa), şimdiye kadar oynayan sayısı (`players`), ızgara,
  * bölgeler, hücre başına maddeler (isim yok), karıştırılmış isim listesi ve bu
  * cihazın açtığı ipuçları (bulanık JPEG, base64).
  * İsim–hücre eşleşmesi, foto kimlikleri ve dosya yolları DÖNMEZ.
@@ -16,6 +17,7 @@
 import { errorJson, json } from '../_shared/http.ts'
 import {
   downloadBase64,
+  guessCountOf,
   guessOf,
   hintCellsOf,
   hintsOf,
@@ -48,7 +50,11 @@ serve('get-game', ['POST'], async (req, origin) => {
     return json({ status: 'played', result: await playedResult(db, game, guess, hash) }, 200, origin)
   }
 
-  const [photos, used] = await Promise.all([photosOf(db, code), hintsOf(db, code, hash)])
+  const [photos, used, players] = await Promise.all([
+    photosOf(db, code),
+    hintsOf(db, code, hash),
+    guessCountOf(db, code),
+  ])
   const hintPaths = hintCellsOf(game.cells, photos)
   const hints: Record<string, string> = {}
   await Promise.all(
@@ -63,6 +69,7 @@ serve('get-game', ['POST'], async (req, origin) => {
       status: 'open',
       game: publicGame(game, new Set(hintPaths.keys())),
       hints,
+      players,
       expiresAt: game.expires_at,
     },
     200,

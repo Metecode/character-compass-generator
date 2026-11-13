@@ -85,6 +85,7 @@ serve('create-game', ['POST'], async (req, origin) => {
   const { error: insertError } = await db.from('games').insert({
     code,
     title: game.title,
+    creator_name: game.creatorName,
     grid_size: game.gridSize,
     regions: game.regions,
     cells: game.cells.map((c) => ({
