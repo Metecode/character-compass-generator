@@ -4,6 +4,7 @@ import Cropper, { type Area } from 'react-easy-crop'
 import { cropToJpeg } from '../lib/image'
 import { savePhoto } from '../lib/photos'
 import { useCompassStore } from '../store/compassStore'
+import { useOverlay } from '../hooks/useOverlay'
 import { useUiStore } from '../store/uiStore'
 
 export function CropModal() {
@@ -14,6 +15,7 @@ export function CropModal() {
 }
 
 function CropDialog({ cellId, src }: { cellId: string; src: string }) {
+  useOverlay()
   const titleId = useId()
   const closeCrop = useUiStore((s) => s.closeCrop)
   const showToast = useUiStore((s) => s.showToast)

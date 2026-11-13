@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useBackgroundScrollLock, useSheetFrame } from '../hooks/useSheetFrame'
 import { useIsDesktop } from '../hooks/useMediaQuery'
+import { useOverlay } from '../hooks/useOverlay'
 import { panelTitle, revealDelta } from '../lib/viewport'
 import { useCompassStore } from '../store/compassStore'
 import { CellEditor } from './CellEditor'
@@ -72,6 +73,7 @@ export function EditorPanel() {
   const mobileOpen = open && !isDesktop
   const frame = useSheetFrame(mobileOpen)
   useBackgroundScrollLock(mobileOpen, sheetRef)
+  useOverlay(mobileOpen)
 
   useEffect(() => {
     if (!selectedId) return

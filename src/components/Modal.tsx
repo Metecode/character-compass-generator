@@ -1,5 +1,6 @@
 import { X } from '@phosphor-icons/react'
 import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react'
+import { useOverlay } from '../hooks/useOverlay'
 
 interface Props {
   title: string
@@ -13,6 +14,7 @@ interface Props {
 export function Modal({ title, onClose, children, footer, size = 'md' }: Props) {
   const titleId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
+  useOverlay()
   const onCloseRef = useRef(onClose)
   useLayoutEffect(() => {
     onCloseRef.current = onClose
