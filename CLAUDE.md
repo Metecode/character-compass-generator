@@ -37,7 +37,10 @@ pnpm + Node 22.20.0 (`.nvmrc`).
   Oturum anahtarı `compass-rooms`'ta (`src/store/roomsStore.ts`).
   Aşama geçişleri SQL fonksiyonlarında, oda satırı kilitlenerek (`supabase/migrations/*live_rooms*`);
   süre dolunca aşamayı cron değil ilk `get-room-state` isteği ilerletir. Taslak kaydı sinyalsizdir
-  (`src/lib/draftSaver.ts`). "Canlı oda kur" geçici olarak `/?oda=1` bayrağının arkasında (`src/lib/roomFlag.ts`).
+  (`src/lib/draftSaver.ts`). Açılışta madde kimliği istemciye gitmez (sıralı kimlik yazarlığı
+  ele verir); gizleme hücre içi rastgele sırayla (`room_items.ord`). Sonuç pusulası ve PNG
+  `src/components/room/RoomBoard.tsx`, düzenleyiciye aktarma `src/lib/roomResult.ts` + `loadCompass`.
+  "Canlı oda kur" geçici olarak `/?oda=1` bayrağının arkasında (`src/lib/roomFlag.ts`).
 - `/g/*` linkleri `g.html` girişinden açılır (aynı `src/main.tsx`, yalnızca og/twitter etiketleri
   farklı; `public/_redirects`'te genel kuraldan önce). Önizleme görseli `public/og-game.png`,
   kaynağı `scripts/og-game.html` → `pnpm og:game`. `/r/*` aynı şekilde: `r.html`, `public/og-room.png` (`pnpm og:room`). `index.html`'in etiketleri ana sayfanındır.

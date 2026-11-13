@@ -110,10 +110,19 @@ Kurallar:
 > **Parça B (13 Kasım 2026):** başlatma (mod alt sınırı sunucuda), rastgele halka ataması, yazma
 > ekranı (büyük hedef, Klasik'te "1/3"), sinyalsiz taslak kaydı, hazır/düzenlemeye dönme, sunucu
 > saatine göre geri sayım, admin erken bitirme, argo süzgeci, cron'suz aşama geçişi; sunucu canlıda.
-> Sıradaki: C (açılış, skor, sonuç, silme).
+> **Parça C (13 Kasım 2026):** açılış (her hücre iki adım: maddeler + tahmin → admin "Aç" → foto,
+> isim ve bilenler; "Sıradaki"), oyuncu listesinden tek dokunuşla değiştirilebilir tahmin, admin için
+> "x/y tahmin etti", madde gizleme (ekrandan ve sonuçtan), ara skor şeridi, çevirme animasyonu ve
+> bilene vurgu (azaltılmış harekete uyar), BITTI'de skor tablosu, dolu pusula, PNG, düzenleyiciye
+> aktarma, "Odayı şimdi sil", 30 dk sonra silinme. Kod ve testler dalda; **migration ve fonksiyonlar
+> henüz canlıya alınmadı** (onay bekliyor), canlı denemeler ondan sonra.
+> **Kararlar (C):** o hücreye madde yazmakla görevli olan tahmin edemez (cevabı biliyor); hedefin
+> kendisi edebilir. Açılmış kişiler adaylardan düşer. 1 doğru = 1 puan. Madde kimliği istemciye
+> gitmez (yazarlığı ele verirdi); gizleme hücre içi rastgele sırayla yapılır. Yazarlık oyun
+> bittikten sonra da gösterilmez.
 > **Geçici gizli giriş:** "Canlı oda kur" menüde yalnızca cihazda bayrak varsa görünür
 > (`/?oda=1` yazar, `/?oda=0` siler; `src/lib/roomFlag.ts`). `/r/{kod}` bayraksız çalışır.
-> C bitince bayrak ve `roomFlag.ts` kaldırılacak.
+> Cihazda denenip onaylanınca bayrak ve `roomFlag.ts` ayrı bir işle kaldırılacak.
 
 "Ortak doldurma" fikrinin yerine geçer.
 

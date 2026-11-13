@@ -211,8 +211,8 @@ export function WritingView({
     body = (
       <section className="rounded-2xl border-[3px] border-ink bg-surface p-6 text-center shadow-brutal-lg" role="status">
         <CircleNotch size={32} weight="bold" className="mx-auto animate-spin" aria-hidden />
-        <h1 className="mt-3 text-2xl font-black tracking-tight">Süre doldu</h1>
-        <p className="mt-2">Maddeler toplanıyor, açılış birazdan başlıyor.</p>
+        <h1 className="mt-3 text-2xl font-black tracking-tight">Süre doldu, maddeler toplanıyor…</h1>
+        <p className="mt-2">Açılış birazdan başlıyor.</p>
       </section>
     )
   } else if (writing.meReady) {

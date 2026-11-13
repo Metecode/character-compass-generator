@@ -60,6 +60,60 @@ export interface MemberView {
   players: RoomPlayer[]
   /** Yalnızca YAZMA aşamasında. */
   writing?: WritingState
+  /** Yalnızca AÇILIŞ aşamasında. */
+  reveal?: RevealState
+  /** Yalnızca BITTI aşamasında. */
+  result?: ResultState
+}
+
+/** Hücredeki görünür madde; `key` hücre içi sıra (gizlemek için). */
+export interface RoomItem {
+  key: number
+  text: string
+}
+
+export interface OpenCell {
+  cell: number
+  playerId: string
+  items: RoomItem[]
+}
+
+export interface ScoreRow {
+  playerId: string
+  score: number
+}
+
+/** AÇILIŞ: o anki hücre, açılmış hücreler ve ara skor (sunucu: _shared/room.ts → RevealView). */
+export interface RevealState {
+  gridSize: 2 | 3 | 4
+  /** 0 tabanlı sıra ve toplam hücre. */
+  position: number
+  total: number
+  step: 'guess' | 'shown'
+  cell: number
+  items: RoomItem[]
+  /** Hücresi henüz açılmamış oyuncular. */
+  candidates: string[]
+  /** false: bu hücreye madde yazmakla görevliydin. */
+  canGuess: boolean
+  myGuess: string | null
+  /** Yalnızca admin. */
+  guessed?: number
+  eligible?: number
+  /** Gösterme adımında. */
+  target?: string
+  correct?: string[]
+  opened: OpenCell[]
+  scores: ScoreRow[]
+}
+
+/** BITTI: dolu pusula ve tam skor tablosu. */
+export interface ResultState {
+  gridSize: 2 | 3 | 4
+  cells: OpenCell[]
+  scores: ScoreRow[]
+  /** Odanın silineceği an (sunucu saati, ms). */
+  deletesAt: number
 }
 
 /** YAZMA aşamasında bu oyuncunun görevi (yalnızca kendi maddeleri; kimin hazır olduğu yok). */
@@ -129,12 +183,15 @@ export async function getRoomState(code: string, session?: string): Promise<Room
   return res
 }
 
-export type PlayerAction = { action: 'leave' }
+export type PlayerAction = { action: 'leave' } | { action: 'guess'; position: number; playerId: string }
 export type AdminAction =
   | { action: 'kick'; playerId: string }
   | { action: 'delete' }
   | { action: 'start' }
   | { action: 'end-writing' }
+  | { action: 'reveal'; position: number }
+  | { action: 'next'; position: number }
+  | { action: 'hide'; cell: number; key: number }
 
 export const roomAction = (s: RoomSession, a: PlayerAction): Promise<unknown> =>
   call('room-action', json({ code: s.code, session: s.session, ...a }), 'application/json')
@@ -177,6 +234,11 @@ const MESSAGES: Record<string, string> = {
   time_up: 'Yazma süresi bitti.',
   item_too_long: 'Madde en fazla 40 karakter olabilir.',
   not_assigned: 'Bu madde sana atanmamış. Sayfayı yenile.',
+  not_reveal: 'Açılış bitti.',
+  stale: 'Ekran güncelleniyor, tekrar dene.',
+  not_allowed: 'Bu kişiye sen de yazdın; bu hücrede tahmin yok.',
+  invalid_guess: 'Bu kişi zaten açıldı, başka birini seç.',
+  no_item: 'Bu madde artık yok.',
   payload_too_large: 'Fotoğraf çok büyük. Başka bir fotoğraf dene.',
   photo_too_large: 'Fotoğraf çok büyük. Başka bir fotoğraf dene.',
   photo_not_jpeg: 'Fotoğraf okunamadı. Başka bir fotoğraf dene.',

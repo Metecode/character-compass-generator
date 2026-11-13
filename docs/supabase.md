@@ -13,6 +13,8 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 | Tahmin oyunu (Aşama 3) | `supabase/migrations/20261114000100_guess_game.sql` | `guesses`, `guess_hints` (oyunla cascade silinir), `game_photos.blur_path`, `submit_guess()` |
 | Çözme süresi | `supabase/migrations/20261115000100_solve_time.sql` | `guess_starts` (cascade), `guesses.duration_seconds`, `start_guess()`; `submit_guess()` süreyi yazar |
 | Canlı oda (Aşama 4) | `supabase/migrations/20261117000100_live_rooms.sql` | `rooms`, `room_players`, `room_items`, `room_guesses` (odaya cascade); `room_join()`, `room_remove_player()`, `room_handover_admin()`; private `room-photos` kovası |
+| Canlı oda yazma (B) | `supabase/migrations/20261118000100_live_rooms_writing.sql` | `room_start()`, `room_save_items()`, `room_end_writing()`, `room_finish_writing()`, `room_enter_reveal()` |
+| Canlı oda açılış (C) | `supabase/migrations/20261119000100_live_rooms_reveal.sql` | `room_items.ord`; `room_enter_reveal()` (yeniden), `room_reveal_target()`, `room_guess()`, `room_reveal_step()`, `room_hide_item()` |
 | Zamanlama | `supabase/migrations/20261113000200_schedules.sql` | pg_cron + pg_net; cleanup sırrı Vault'ta, DB içinde üretilir |
 | Fonksiyonlar | `supabase/functions/{create-game,delete-game,cleanup,health,get-game,start-game,use-hint,submit-guess,game-stats,create-room,join-room,get-room-state,room-action,room-admin}` | Hepsi `verify_jwt = false`; yetki kontrolü fonksiyon içinde |
 | Ortak kod | `supabase/functions/_shared/` | `validate.ts`, `play.ts`, `room.ts`, `jpeg.ts`, `tokens.ts`, `http.ts`, `ip.ts` saf TS → vitest; `game.ts`, `roomDb.ts`, `supabase.ts` Edge ortamı |
@@ -32,8 +34,8 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 | `create-room` | Tarayıcı ("Canlı oda kur") | publishable | IP başına saatte 10 ve günde 30; sistemde en fazla 20 aktif oda |
 | `join-room` | Tarayıcı (`/r/{code}`) | publishable | IP başına saatte 60; bitmemiş odalarda toplam 180 oyuncu |
 | `get-room-state` | Tarayıcı (`/r/{code}`) | publishable + `session` (yoksa ziyaretçi görünümü) | oturum başına dakikada 90; oturumsuz IP başına saatte 240 |
-| `room-action` | Tarayıcı | publishable + `session`; `action` beyaz listede (`leave`, `save-items`) | oturum başına saatte 600 |
-| `room-admin` | Tarayıcı (admin) | publishable + `session` = `rooms.admin_player_id`; `action` beyaz listede (`kick`, `delete`, `start`, `end-writing`) | oturum başına saatte 300 |
+| `room-action` | Tarayıcı | publishable + `session`; `action` beyaz listede (`leave`, `save-items`, `guess`) | oturum başına saatte 600 |
+| `room-admin` | Tarayıcı (admin) | publishable + `session` = `rooms.admin_player_id`; `action` beyaz listede (`kick`, `delete`, `start`, `end-writing`, `reveal`, `next`, `hide`) | oturum başına saatte 300 |
 | `cleanup` | Yalnızca pg_cron (15 dk) | `x-cleanup-secret` (Vault'taki sır, DB'de doğrulanır) | — |
 | `health` | GitHub Actions | yok; veri döndürmez (204) | — |
 
@@ -103,12 +105,43 @@ bir Edge Function'dır.
   `room_finish_writing` ile aşamayı ilerletir ve sinyal gönderir; istemciler bitiş + pay + 0,3–1,8 sn
   sonra sorar, ilerlemezse 3 sn'de bir yeniden. Admin `end-writing` ile erken bitirince aşama hemen
   ilerlemez: `writing_ends_at` şimdiye çekilir, istemciler son taslaklarını pay içinde gönderir.
-  Aşama geçişi `room_enter_reveal`'da (C açılış sırasını burada kuracak).
+  Aşama geçişi `room_enter_reveal`'da. İstemcide süre dolduktan aşama ilerleyene kadar
+  "Süre doldu, maddeler toplanıyor…" görünür.
 - **Yazma görünümü (B):** `writing` = bitiş anı (sunucu saati, ms), hazır sayısı / toplam, kendi
   hazır durumu ve kendi görevi (hedef kimlikleri + yalnızca kendi yazdığı metinler). Halka, kimin
   hazır olduğu ve başkalarının maddeleri dönmez.
+- **Açılış (C):** `room_enter_reveal` oyuncuları ızgaranın rastgele hücrelerine dağıtır
+  (`room_players.cell_index`), maddelere hücre içi rastgele sıra verir (`room_items.ord`) ve
+  `reveal_index = 0`, `reveal_step = 'guess'` yapar. Hücreler `cell_index` sırasıyla açılır;
+  `reveal_index` kaçıncı hücrede olunduğudur. Her hücre iki adım: `guess` (maddeler açık, tahmin
+  alınır) → admin `reveal` → `shown` (sahibi ve doğru bilenler açık, bilenlere 1 puan,
+  `room_players.score`) → admin `next` → sonraki hücrenin `guess`'i; sondaysa BITTI.
+  Admin düğmeleri `{ position }` gönderir; güncel değilse 409 `stale` (çift dokunma, iki sekme).
+- **Tahmin (C):** `room-action` → `guess` `{ position, playerId }` (`room_guess`, oda kilitli).
+  Tahmin adımı bitene kadar değiştirilebilir. O hücreye madde yazmakla görevli olan (boş bıraksa da)
+  tahmin edemez: 403 `not_allowed` (cevabı biliyor). Hedefin kendisi tahmin edebilir. Hücresi
+  açılmış kişi seçilemez: 400 `invalid_guess`. Sinyal yalnızca `admin` olayıyla gider (admin
+  "x/y tahmin etti"yi yeniden çeker); sürüm artar.
+- **Gizleme (C):** `room-admin` → `hide` `{ cell, key }` (`room_hide_item`): açılmış ya da o an
+  açık hücrede, BITTI'de de. `room_items.hidden = true`; madde ekrandan ve sonuç pusulasından
+  kalkar, geri alınamaz. Madde kimliği istemciye gitmez: sıralı kimlik halka sırasını, o da
+  yazarlığı ele verirdi; `key` hücre içi rastgele sıradır.
+- **Açılış görünümü (C):** `reveal` = sıra / toplam, adım, o anki hücrenin yeri ve görünür
+  maddeleri (boş ve gizli düşer), adaylar (hücresi açılmamış herkes, oyuncu sırasıyla),
+  `canGuess`, kendi tahmini, açılmış hücreler, puan sırası. Yalnızca admine `guessed` / `eligible`.
+  Gösterme adımında `target` ve `correct` (bilenler). Açılmamış hücrenin sahibi, başkalarının
+  tahmini ve yazarlık dönmez.
+- **BITTI (C):** son hücrede `next` → `phase = 'done'`, `finished_at = now()`,
+  `expires_at = least(expires_at, now() + 30 dk)` (`ROOM_DONE_TTL_SECONDS`). Görünüm `result` =
+  tüm hücreler (görünür maddeleriyle), tam skor tablosu, `deletesAt`. Yazarlık yine dönmez.
+  PNG ve "Düzenleyiciye aktar" tarayıcıda: fotoğraflar imzalı adresten indirilir (Storage
+  `Access-Control-Allow-Origin: *`), PNG için blob adresine çevrilip ekran dışındaki 1080'lik
+  çizime verilir; aktarmada IndexedDB'ye kaydedilir ve pusula `loadCompass` ile yüklenir.
+- **Admin devri açılışta:** kural aynı (5 dk görünmezse en eski çevrimiçi oyuncu). Durum
+  tamamen sunucuda olduğu için yeni admin kaldığı hücreden ve adımdan devam eder. Oyuncular admin
+  bağlı değilken "… bağlı değil. 5 dakika içinde dönmezse adminlik sıradaki oyuncuya geçer." görür.
 - **Silme:** oda kuruluştan en geç 2 saat sonra (`expires_at`, tablo kısıtıyla), oyun bitince
-  30 dakika sonra (Parça C). `cleanup` süresi dolan odaları dosyalarıyla siler ve `room-photos`'taki
+  30 dakika sonra. `cleanup` süresi dolan odaları dosyalarıyla siler ve `room-photos`'taki
   yetim klasörleri temizler. Admin `room-admin` → `delete` ile hemen siler.
 
 **Realtime.** Oda başına bir public Broadcast kanalı: `room-{channel_id}` (22 karakter base62,
@@ -352,9 +385,29 @@ Betikler `.env.local`'daki publishable anahtarla canlı fonksiyonları çağır�
          (select count(*) from public.room_players where room_code = 'KOD') as oyuncu,
          (select count(*) from storage.objects where bucket_id = 'room-photos' and name like 'KOD/%') as dosya;
   ```
+- **Açılış API'si (C)** (`pnpm room:check:reveal`, `scripts/room-reveal-check.mjs`): 5 kişilik
+  Klasik oda API ile oynanır. Yanıtlarda yazar / halka / madde kimliği yok; Klasik'te 3 yazar
+  tahmin edemez (403), tahmin değişir, yanlış sıra 409, admin "2/2" görür, oyuncu yalnızca kendi
+  tahminini görür; oyuncu açamaz / gizleyemez (403), tahmin adımında `next` 409, çift `reveal` 409;
+  gizlenen madde o an ve sonuçta yok; açılınca sahibi ve bilenler, bilen 1 puan; açılmış kişi
+  tahmin edilemez (400); BITTI'de 5 hücre, silinme ~30 dk sonra; silinen oda 404.
+- **Tam oyun, çok sekmeli (C)** (`pnpm dev` + `pnpm room:e2e:reveal`): admin masaüstünde, 5 oyuncu
+  390 px'te; herkes yazıp hazır olunca açılış; her hücrede tahmin, admin "x/y", gizleme, "Aç",
+  "Sıradaki"; bir oyuncu açılışta kopup döner; BITTI'de skor tablosu, silinme notu, PNG
+  1080×1080, düzenleyiciye aktarma, "Odayı şimdi sil". Sonda bağlam başına Edge Function çağrı
+  sayısı. `HANDOVER=1` admin sekmesini kapatıp 5 dk sonraki devri de dener.
+- **PNG boyutları (C)** (`pnpm dev` + `SHOTS=klasör pnpm room:png`): 4, 6 ve 11 oyunculu oyunlar
+  API ile oynanır, sonuç ekranında PNG indirilir: 2×2, 3×3, 4×4, hepsi 1080×1080.
+- **Eski oyun fonksiyonları** (`pnpm game:check`, `scripts/game-api-check.mjs`): `_shared/` değişince
+  yeniden yayınlanan tahmin oyunu fonksiyonlarının duman testi (health, create, get, start, hint,
+  submit ×2, stats, yanlış anahtar, delete, cleanup sırsız 404).
 - **Testten sonra `rate_limits` temizliği** (oda işlemleri):
   ```sh
   npx supabase db query --remote --yes "delete from public.rate_limits where key like '%:create-room' or key like '%:create-room-day' or key like '%:join-room' or key like '%:room-preview' or key like '%:room-state' or key like '%:room-action' or key like '%:room-admin';"
+  ```
+  Tahmin oyunu denemesinden sonra (`pnpm game:check`):
+  ```sh
+  npx supabase db query --remote --yes "delete from public.rate_limits where key like '%:create-game' or key like '%:create-game-day' or key like '%:delete-game' or key like '%:get-game' or key like '%:start-game' or key like '%:use-hint' or key like '%:submit-guess' or key like '%:game-stats';"
   ```
 
 ## Bilinen sınırlar
@@ -362,6 +415,10 @@ Betikler `.env.local`'daki publishable anahtarla canlı fonksiyonları çağır�
 - `cleanup` her turda en fazla 50 süresi dolmuş oyun ve 50 oda siler; kalanlar sonraki turda.
   Oda, süresi dolduktan sonra en geç ~15 dk daha diskte durur (istemcilere hemen 404).
 - Canlı oda kanalı public'tir; konu adını bilen biri sahte boş sinyal gönderebilir (veri sızmaz).
+- Klasik modda 4 oyuncuyla herkes herkese yazdığı için her hücrede yalnızca hedefin kendisi tahmin
+  edebilir ("kendini tanıdın mı?"); puanlama ince kalır. 5+ oyuncuda her hücrede n − 3 kişi tahmin eder.
+- Son açılan hücrede tek aday kalır (önceki hücreler adaylardan düşer); o hücre bedava puandır.
+- Admin açılışta koparsa devir 5 dk bekler; o süre açılış durur (oyuncular bunu ekranda görür).
 - iOS Safari arka plana geçince soket kapanır; dönünce görünürlük olayıyla hemen yeniden çekilir.
   Gerçek cihazda denenmeli.
 - Tahmin oyununda cihaz kimliği tarayıcı deposundadır: gizli sekme ya da temizlenmiş tarayıcı

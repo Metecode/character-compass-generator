@@ -10,14 +10,20 @@
  *                         (409 too_few + needed). Halka ve boş madde satırları kurulur.
  *   end-writing         — yazmayı erken bitirir: bitiş anı şimdiye çekilir, kayıt
  *                         payından sonraki ilk durum isteği aşamayı ilerletir.
+ *   reveal { position } — AÇILIŞ: o anki hücrede tahmin → göster; doğru bilenlere puan.
+ *   next   { position } — göster → sonraki hücre; son hücredeyse BITTI (oda
+ *                         ROOM_DONE_TTL_SECONDS sonra silinir).
+ *   hide   { cell, key } — açılmış ya da o an açık hücredeki maddeyi gizler
+ *                         (ekrandan ve sonuç pusulasından kalkar; geri alınamaz).
+ *   `position` güncel değilse (çift dokunma) 409 stale; istemci yeniden çeker.
  *
  * Limit: oturum başına saatte 300.
  */
 
 import { readJson } from '../_shared/game.ts'
 import { errorJson, json } from '../_shared/http.ts'
-import { ROOM_ASSIGNMENT, ROOM_MAX_PLAYERS, ROOM_MIN_PLAYERS } from '../_shared/limits.ts'
-import { ROOM_ADMIN_ACTIONS, channelTopic, isUuid, parseAction } from '../_shared/room.ts'
+import { ROOM_ASSIGNMENT, ROOM_DONE_TTL_SECONDS, ROOM_MAX_PLAYERS, ROOM_MIN_PLAYERS } from '../_shared/limits.ts'
+import { ROOM_ADMIN_ACTIONS, channelTopic, isUuid, parseAction, parseHide, parsePosition } from '../_shared/room.ts'
 import { loadLiveRoom, playerBySession, removeRoomPhoto } from '../_shared/roomDb.ts'
 import {
   adminClient,
@@ -97,6 +103,45 @@ serve('room-admin', ['POST'], async (req, origin) => {
       const r = data as { ok: boolean; error?: string }
       if (!r.ok) {
         const status = r.error === 'not_admin' ? 403 : r.error === 'not_found' ? 404 : 409
+        return errorJson(r.error ?? 'internal', status, origin)
+      }
+      await signalRoom(topic)
+      return json({ ok: true }, 200, origin)
+    }
+    case 'reveal':
+    case 'next': {
+      const position = parsePosition(body)
+      if (!position.ok) return errorJson(position.error, 400, origin)
+      const { data, error } = await db.rpc('room_reveal_step', {
+        p_code: room.code,
+        p_admin: me.id,
+        p_position: position.value,
+        p_action: action === 'reveal' ? 'open' : 'next',
+        p_done_ttl_seconds: ROOM_DONE_TTL_SECONDS,
+      })
+      if (error) throw new Error('reveal step failed')
+      const r = data as { ok: boolean; error?: string; done?: boolean }
+      if (!r.ok) {
+        const status = r.error === 'not_admin' ? 403 : r.error === 'not_found' ? 404 : 409
+        return errorJson(r.error ?? 'internal', status, origin)
+      }
+      await signalRoom(topic)
+      return json({ ok: true, done: r.done === true }, 200, origin)
+    }
+    case 'hide': {
+      const input = parseHide(body)
+      if (!input.ok) return errorJson(input.error, 400, origin)
+      const { data, error } = await db.rpc('room_hide_item', {
+        p_code: room.code,
+        p_admin: me.id,
+        p_cell: input.value.cell,
+        p_ord: input.value.key,
+      })
+      if (error) throw new Error('hide failed')
+      const r = data as { ok: boolean; error?: string }
+      if (!r.ok) {
+        const status =
+          r.error === 'not_admin' ? 403 : r.error === 'not_found' || r.error === 'no_item' ? 404 : 409
         return errorJson(r.error ?? 'internal', status, origin)
       }
       await signalRoom(topic)

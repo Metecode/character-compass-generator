@@ -11,6 +11,10 @@
  *                 sonra ROOM_WRITE_GRACE_SECONDS boyunca metin kabul edilir.
  *                 Argo kapalı odada süzgece takılan madde boş kaydedilir ve
  *                 `flagged` içinde döner.
+ *   guess       { position, playerId } — AÇILIŞ'ın tahmin adımında o anki hücre için
+ *                 tahmin (değiştirilebilir). Hücreye madde yazmakla görevli olan
+ *                 tahmin edemez (403 not_allowed). Sinyal yalnızca admine ("x/y").
+ *                 `position` güncel değilse 409 stale.
  *
  * Limit: oturum başına saatte 600.
  */
@@ -18,7 +22,14 @@
 import { readJson } from '../_shared/game.ts'
 import { errorJson, json } from '../_shared/http.ts'
 import { ROOM_WRITE_GRACE_SECONDS } from '../_shared/limits.ts'
-import { ROOM_PLAYER_ACTIONS, channelTopic, parseAction, parseSaveItems, screenItems } from '../_shared/room.ts'
+import {
+  ROOM_PLAYER_ACTIONS,
+  channelTopic,
+  parseAction,
+  parseGuess,
+  parseSaveItems,
+  screenItems,
+} from '../_shared/room.ts'
 import { loadLiveRoom, playerBySession, removeRoomPhoto } from '../_shared/roomDb.ts'
 import {
   adminClient,
@@ -83,6 +94,25 @@ serve('room-action', ['POST'], async (req, origin) => {
       }
       if (r.changed) await signalRoom(channelTopic(room.channel_id))
       return json({ ok: true, flagged: screened.flagged, advanced: r.advanced === true }, 200, origin)
+    }
+    case 'guess': {
+      const input = parseGuess(body)
+      if (!input.ok) return errorJson(input.error, 400, origin)
+      const { data, error } = await db.rpc('room_guess', {
+        p_code: room.code,
+        p_player: me.id,
+        p_position: input.value.position,
+        p_guessed: input.value.playerId,
+      })
+      if (error) throw new Error('guess failed')
+      const r = data as { ok: boolean; error?: string }
+      if (!r.ok) {
+        const status =
+          r.error === 'not_found' ? 404 : r.error === 'not_allowed' ? 403 : r.error === 'invalid_guess' ? 400 : 409
+        return errorJson(r.error ?? 'internal', status, origin)
+      }
+      await signalRoom(channelTopic(room.channel_id), 'admin')
+      return json({ ok: true }, 200, origin)
     }
   }
 })

@@ -10,15 +10,20 @@ import {
   isSessionToken,
   nameKey,
   parseAction,
+  parseGuess,
+  parseHide,
   parseJoin,
+  parsePosition,
   parseRoomSettings,
   parseSaveItems,
   projectMember,
   projectOutsider,
   screenItems,
   writingExpired,
+  type GuessRow,
   type ItemRow,
   type PlayerRow,
+  type RevealItemRow,
   type RoomRow,
 } from '../room.ts'
 import { randomToken } from '../tokens.ts'
@@ -53,6 +58,8 @@ const player = (id: string, seq: number, seenAgo = 10): PlayerRow => ({
   last_seen_at: ago(seenAgo),
   ready_at: null,
   ring_pos: null,
+  cell_index: null,
+  score: 0,
 })
 
 describe('oda ayarları', () => {
@@ -112,6 +119,9 @@ describe('eylem beyaz listesi', () => {
     expect(parseAction('start', ROOM_PLAYER_ACTIONS)).toBeNull()
     expect(parseAction('start', ROOM_ADMIN_ACTIONS)).toBe('start')
     expect(parseAction('end-writing', ROOM_ADMIN_ACTIONS)).toBe('end-writing')
+    expect(parseAction('guess', ROOM_PLAYER_ACTIONS)).toBe('guess')
+    expect(parseAction('reveal', ROOM_PLAYER_ACTIONS)).toBeNull()
+    for (const a of ['reveal', 'next', 'hide']) expect(parseAction(a, ROOM_ADMIN_ACTIONS)).toBe(a)
     expect(parseAction('__proto__', ROOM_ADMIN_ACTIONS)).toBeNull()
     expect(parseAction(['kick'], ROOM_ADMIN_ACTIONS)).toBeNull()
   })
@@ -295,5 +305,119 @@ describe('yazma görevi', () => {
     expect(writingExpired(r, NOW, 5)).toBe(false)
     expect(writingExpired(r, NOW + 1001, 5)).toBe(true)
     expect(writingExpired({ ...r, phase: 'reveal' }, NOW + 60_000, 5)).toBe(false)
+  })
+})
+
+describe('açılış ve sonuç', () => {
+  // 5 oyuncu, 3×3. Hücreler: p3→0, p1→2, p5→4, p2→7, p4→8 (açılış sırası p3, p1, p5, p2, p4).
+  const cells: Record<string, number> = { p1: 2, p2: 7, p3: 0, p4: 8, p5: 4 }
+  const ps = ['p1', 'p2', 'p3', 'p4', 'p5'].map((id, i) => ({ ...player(id, i + 1), cell_index: cells[id]! }))
+  // Klasik halka p1→p2→p3→p4→p5→p1: p3'e p2, p1, p5 yazar; p1'e p4, p5, p3.
+  const item = (author: string, target: string, ord: number, text: string, hidden = false): RevealItemRow => ({
+    author_id: author,
+    target_id: target,
+    ord,
+    text,
+    hidden,
+  })
+  const items: RevealItemRow[] = [
+    item('p2', 'p3', 1, 'kahveci'),
+    item('p1', 'p3', 0, 'geç kalır'),
+    item('p5', 'p3', 2, ''),
+    item('p4', 'p1', 0, 'çok güler'),
+    item('p5', 'p1', 1, 'kaba söz', true),
+    item('p3', 'p1', 2, 'kedici'),
+  ]
+  const reveal = (over: Partial<RoomRow>) =>
+    room({ phase: 'reveal', grid_size: 3, reveal_index: 0, reveal_step: 'guess', ...over })
+
+  it('tahmin adımı: maddeler hücre içi sırayla, boş ve gizli düşer; sahibi ve yazarlar dönmez', () => {
+    const guesses: GuessRow[] = [{ player_id: 'p4', guessed_id: 'p2' }]
+    const v = projectMember(reveal({}), ps, 'p4', NOW, [], { items, guesses })
+    const r = v.reveal!
+    expect(r).toMatchObject({ gridSize: 3, position: 0, total: 5, step: 'guess', cell: 0, canGuess: true, myGuess: 'p2' })
+    expect(r.items).toEqual([
+      { key: 0, text: 'geç kalır' },
+      { key: 1, text: 'kahveci' },
+    ])
+    expect(r.opened).toEqual([])
+    expect(r.target).toBeUndefined()
+    expect(r.correct).toBeUndefined()
+    expect(r.guessed).toBeUndefined() // admin değil
+    // Adaylar oyuncu sırasıyla (hücre sırası değil).
+    expect(r.candidates).toEqual(['p1', 'p2', 'p3', 'p4', 'p5'])
+    const text = JSON.stringify(v)
+    expect(text).not.toMatch(/author|cell_index|ring|session|"p3","items"/)
+    expect(text).not.toContain('kaba söz')
+  })
+
+  it('yazar tahmin edemez; hedefin kendisi edebilir', () => {
+    for (const a of ['p1', 'p2', 'p5']) {
+      expect(projectMember(reveal({}), ps, a, NOW, [], { items, guesses: [] }).reveal!.canGuess).toBe(false)
+    }
+    expect(projectMember(reveal({}), ps, 'p3', NOW, [], { items, guesses: [] }).reveal!.canGuess).toBe(true)
+  })
+
+  it('admin kaç kişinin tahmin ettiğini ve kaç kişinin edebileceğini görür, kimin neyi seçtiğini görmez', () => {
+    const guesses: GuessRow[] = [
+      { player_id: 'p4', guessed_id: 'p2' },
+      { player_id: 'p3', guessed_id: 'p3' },
+    ]
+    const v = projectMember(reveal({ admin_player_id: 'p1' }), ps, 'p1', NOW, [], { items, guesses })
+    expect(v.reveal).toMatchObject({ guessed: 2, eligible: 2, myGuess: null })
+    expect(JSON.stringify(v)).not.toContain('"guessed_id"')
+  })
+
+  it('gösterme adımı: sahibi, doğru bilenler ve açılmış hücreler; puan sırası', () => {
+    const scored = ps.map((p) => ({ ...p, score: p.id === 'p3' ? 1 : 0 }))
+    const guesses: GuessRow[] = [
+      { player_id: 'p4', guessed_id: 'p2' },
+      { player_id: 'p3', guessed_id: 'p3' },
+    ]
+    const r = projectMember(reveal({ reveal_step: 'shown' }), scored, 'p4', NOW, [], { items, guesses }).reveal!
+    expect(r.target).toBe('p3')
+    expect(r.correct).toEqual(['p3'])
+    expect(r.opened).toEqual([{ cell: 0, playerId: 'p3', items: r.items }])
+    expect(r.scores[0]).toEqual({ playerId: 'p3', score: 1 })
+    expect(r.scores.map((s) => s.playerId)).toEqual(['p3', 'p1', 'p2', 'p4', 'p5'])
+  })
+
+  it('ikinci hücrede: önceki açık, adaylardan açılan düşer, gizli madde görünmez', () => {
+    const r = projectMember(reveal({ reveal_index: 1 }), ps, 'p2', NOW, [], { items, guesses: [] }).reveal!
+    expect(r.cell).toBe(2)
+    expect(r.opened.map((c) => c.playerId)).toEqual(['p3'])
+    expect(r.candidates).toEqual(['p1', 'p2', 'p4', 'p5'])
+    expect(r.items).toEqual([
+      { key: 0, text: 'çok güler' },
+      { key: 2, text: 'kedici' },
+    ])
+  })
+
+  it('BITTI: tüm hücreler, tam skor tablosu ve silinme zamanı; açılış bölümü yok', () => {
+    const v = projectMember(room({ phase: 'done', grid_size: 3 }), ps, 'p2', NOW, [], { items, guesses: [] })
+    expect(v.reveal).toBeUndefined()
+    expect(v.result!.cells.map((c) => [c.cell, c.playerId])).toEqual([
+      [0, 'p3'],
+      [2, 'p1'],
+      [4, 'p5'],
+      [7, 'p2'],
+      [8, 'p4'],
+    ])
+    expect(v.result!.scores).toHaveLength(5)
+    expect(v.result!.deletesAt).toBe(Date.parse(room().expires_at))
+    expect(JSON.stringify(v)).not.toMatch(/author|kaba söz/)
+  })
+
+  it('eylem gövdeleri', () => {
+    const id = '0b5e8c4e-6a0f-4c5e-9a39-1f7f2b0c2d11'
+    expect(parseGuess({ position: 3, playerId: id })).toEqual({ ok: true, value: { position: 3, playerId: id } })
+    expect(parseGuess({ position: -1, playerId: id }).ok).toBe(false)
+    expect(parseGuess({ position: 1.5, playerId: id }).ok).toBe(false)
+    expect(parseGuess({ position: 1, playerId: 'p1' }).ok).toBe(false)
+    expect(parsePosition({ position: 0 })).toEqual({ ok: true, value: 0 })
+    expect(parsePosition({ position: '0' }).ok).toBe(false)
+    expect(parseHide({ cell: 15, key: 2 })).toEqual({ ok: true, value: { cell: 15, key: 2 } })
+    expect(parseHide({ cell: 16, key: 0 }).ok).toBe(false)
+    expect(parseHide({ cell: 0, key: 3 }).ok).toBe(false)
   })
 })

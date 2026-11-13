@@ -9,12 +9,16 @@ import { ROOM_ADMIN_TIMEOUT_SECONDS, ROOM_MAX_BODY_BYTES, ROOM_ONLINE_SECONDS, R
 import {
   ITEM_COLUMNS,
   PLAYER_COLUMNS,
+  REVEAL_ITEM_COLUMNS,
   ROOM_COLUMNS,
   adminLooksAway,
+  revealTarget,
   isRoomCode,
   isSessionToken,
+  type GuessRow,
   type ItemRow,
   type PlayerRow,
+  type RevealItemRow,
   type RoomRow,
 } from './room.ts'
 import { ROOM_PHOTO_BUCKET } from './supabase.ts'
@@ -49,6 +53,30 @@ export async function myItemsOf(db: SupabaseClient, code: string, authorId: stri
     .eq('author_id', authorId)
   if (error) throw new Error('item lookup failed')
   return (data ?? []) as ItemRow[]
+}
+
+/**
+ * AÇILIŞ / BITTI görünümü için: odanın tüm maddeleri (yazar kimliği yalnızca
+ * tahmin hakkı için; görünüme girmez) ve o anki hücrenin tahminleri.
+ */
+export async function revealDataOf(
+  db: SupabaseClient,
+  room: RoomRow,
+  players: readonly PlayerRow[],
+): Promise<{ items: RevealItemRow[]; guesses: GuessRow[] }> {
+  const { data, error } = await db.from('room_items').select(REVEAL_ITEM_COLUMNS).eq('room_code', room.code)
+  if (error) throw new Error('reveal items lookup failed')
+  const items = (data ?? []) as RevealItemRow[]
+  if (room.phase !== 'reveal') return { items, guesses: [] }
+  const target = revealTarget(players, room.reveal_index ?? 0)
+  if (!target) return { items, guesses: [] }
+  const { data: g, error: gError } = await db
+    .from('room_guesses')
+    .select('player_id, guessed_id')
+    .eq('room_code', room.code)
+    .eq('cell_index', target.cell_index!)
+  if (gError) throw new Error('guess lookup failed')
+  return { items, guesses: (g ?? []) as GuessRow[] }
 }
 
 export async function playerCountOf(db: SupabaseClient, code: string): Promise<number> {

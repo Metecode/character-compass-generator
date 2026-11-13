@@ -32,6 +32,8 @@ export interface CompassState {
   /** İki hücrenin yerini (dolayısıyla içeriğini) takas eder. */
   swapCells: (idA: string, idB: string) => void
   reset: () => void
+  /** Dışarıdan gelen pusulayı (canlı oda sonucu) doğrulayıp mevcutun yerine koyar. Geri alınabilir. */
+  loadCompass: (compass: Compass) => void
   undo: () => void
   redo: () => void
   /** Geçmişe yazmadan foto referanslarını temizler (açılışta kayıp fotolar için). */
@@ -158,6 +160,8 @@ export const useCompassStore = create<CompassState>()(
         }),
 
       reset: () => set((s) => ({ ...commit(s, createDefaultCompass()), selectedId: null })),
+
+      loadCompass: (compass) => set((s) => ({ ...commit(s, sanitizeCompass(compass)), selectedId: null })),
 
       undo: () =>
         set((s) => {

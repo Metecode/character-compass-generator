@@ -3,8 +3,9 @@
  * Gövde: { code, session? }
  *
  * - Oturumu geçerli oyuncuya kendi görünümü (projectMember): oyuncu listesi, ayarlar,
- *   kanal adı, sunucu saati; YAZMA'da yalnızca kendi görevi ve kendi maddeleri.
- *   Yazarlık bilgisi hiçbir aşamada başkasına dönmez.
+ *   kanal adı, sunucu saati; YAZMA'da yalnızca kendi görevi ve kendi maddeleri;
+ *   AÇILIŞ'ta o anki hücre, açılmış hücreler ve skorlar; BITTI'de dolu pusula.
+ *   Yazarlık bilgisi hiçbir aşamada istemciye dönmez.
  * - Oturumsuz (ya da oturumu artık geçersiz) ziyaretçiye yalnızca kurucu adı,
  *   oyuncu sayısı ve katılınabilirlik (projectOutsider). `sessionValid: false`
  *   istemciye cihazdaki anahtarı silmesini söyler (çıkarıldı ya da çıktı).
@@ -20,7 +21,7 @@ import { readJson } from '../_shared/game.ts'
 import { errorJson, json } from '../_shared/http.ts'
 import { ROOM_WRITE_GRACE_SECONDS } from '../_shared/limits.ts'
 import { channelTopic, projectMember, projectOutsider, writingExpired } from '../_shared/room.ts'
-import { loadLiveRoom, myItemsOf, playerBySession, playersOf, touchAndHandover } from '../_shared/roomDb.ts'
+import { loadLiveRoom, myItemsOf, playerBySession, playersOf, revealDataOf, touchAndHandover } from '../_shared/roomDb.ts'
 import {
   adminClient,
   checkRateLimit,
@@ -72,5 +73,7 @@ serve('get-room-state', ['POST'], async (req, origin) => {
   }
 
   const myItems = room.phase === 'writing' ? await myItemsOf(db, room.code, me.id) : []
-  return json(projectMember(room, players, me.id, now, myItems), 200, origin)
+  const revealData =
+    room.phase === 'reveal' || room.phase === 'done' ? await revealDataOf(db, room, players) : undefined
+  return json(projectMember(room, players, me.id, now, myItems, revealData), 200, origin)
 })

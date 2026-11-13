@@ -1,9 +1,11 @@
-import { ArrowClockwise, CircleNotch, HourglassHigh } from '@phosphor-icons/react'
+import { ArrowClockwise, CircleNotch } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { ClosedCard } from '../components/room/ClosedCard'
 import { ConnectionBadge } from '../components/room/ConnectionBadge'
 import { JoinView } from '../components/room/JoinView'
 import { LobbyView } from '../components/room/LobbyView'
+import { RevealView } from '../components/room/RevealView'
+import { RoomResultView } from '../components/room/RoomResultView'
 import { WritingView } from '../components/room/WritingView'
 import { ToastHost } from '../components/ToastHost'
 import { useRoom } from '../hooks/useRoom'
@@ -89,13 +91,36 @@ function Room({ code }: { code: string }) {
         }}
       />
     )
-  } else {
-    // Açılış ve sonuç ekranları C parçasında.
+  } else if (screen.data.phase === 'reveal' && screen.data.reveal) {
     body = (
-      <div className="mx-auto max-w-md rounded-2xl border-[3px] border-ink bg-surface p-6 shadow-brutal-lg" role="status">
-        <HourglassHigh size={30} weight="bold" aria-hidden />
-        <h1 className="mt-3 text-2xl font-black tracking-tight">Maddeler yazıldı</h1>
-        <p className="mt-2">Açılış ekranı yakında hazır olacak.</p>
+      <RevealView
+        data={screen.data}
+        session={screen.session}
+        onChanged={room.refresh}
+        onDeleted={() => {
+          room.forget()
+          setDeleted(true)
+        }}
+      />
+    )
+  } else if (screen.data.phase === 'done' && screen.data.result) {
+    body = (
+      <RoomResultView
+        data={screen.data}
+        session={screen.session}
+        clockOffset={screen.clockOffset}
+        onDeleted={() => {
+          room.forget()
+          setDeleted(true)
+        }}
+      />
+    )
+  } else {
+    // Aşama geçişi sırasında (görünüm verisi eksikse) boş ekran yerine bekleme.
+    body = (
+      <div className="flex items-center justify-center gap-2 py-24 font-bold" role="status">
+        <CircleNotch size={24} weight="bold" className="animate-spin" aria-hidden />
+        Hazırlanıyor…
       </div>
     )
   }

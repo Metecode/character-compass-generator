@@ -54,6 +54,9 @@ export interface PlayerRow {
   ready_at: string | null
   /** Halkadaki yeri (başlatınca karıştırılır); lobide null. İstemciye gitmez. */
   ring_pos: number | null
+  /** Açılışta verilen hücre; yalnızca açılmış hücreler istemciye gider. */
+  cell_index: number | null
+  score: number
 }
 
 /** Bu oyuncunun yazdığı madde (yalnızca kendi maddeleri okunur). */
@@ -63,9 +66,28 @@ export interface ItemRow {
   text: string
 }
 
+/**
+ * Açılış ve sonuçta okunan madde satırı. `author_id` yalnızca tahmin hakkı ve
+ * "x/y tahmin etti" sayısı için okunur; görünüme hiçbir biçimde girmez.
+ */
+export interface RevealItemRow {
+  author_id: string
+  target_id: string
+  ord: number | null
+  text: string
+  hidden: boolean
+}
+
+/** O anki hücrenin tahminleri. */
+export interface GuessRow {
+  player_id: string
+  guessed_id: string
+}
+
 export const ROOM_COLUMNS =
   'code, channel_id, mode, write_seconds, allow_profanity, phase, creator_name, admin_player_id, grid_size, writing_ends_at, reveal_index, reveal_step, version, created_at, expires_at'
-export const PLAYER_COLUMNS = 'id, seq, name, photo_url, last_seen_at, ready_at, ring_pos'
+export const PLAYER_COLUMNS = 'id, seq, name, photo_url, last_seen_at, ready_at, ring_pos, cell_index, score'
+export const REVEAL_ITEM_COLUMNS = 'author_id, target_id, ord, text, hidden'
 export const ITEM_COLUMNS = 'target_id, slot, text'
 
 // ---------------------------------------------------------------------------
@@ -129,13 +151,33 @@ export function parseJoin(data: unknown): Result<{ code: string; name: string }>
  * room-action / room-admin: `action` beyaz listede olmalı. Liste her teslimat
  * parçasında genişler; listede olmayan eylem 400 invalid_action döner.
  */
-export const ROOM_PLAYER_ACTIONS = ['leave', 'save-items'] as const
-export const ROOM_ADMIN_ACTIONS = ['kick', 'delete', 'start', 'end-writing'] as const
+export const ROOM_PLAYER_ACTIONS = ['leave', 'save-items', 'guess'] as const
+export const ROOM_ADMIN_ACTIONS = ['kick', 'delete', 'start', 'end-writing', 'reveal', 'next', 'hide'] as const
 export type RoomPlayerAction = (typeof ROOM_PLAYER_ACTIONS)[number]
 export type RoomAdminAction = (typeof ROOM_ADMIN_ACTIONS)[number]
 
 export function parseAction<A extends string>(v: unknown, allowed: readonly A[]): A | null {
   return typeof v === 'string' && (allowed as readonly string[]).includes(v) ? (v as A) : null
+}
+
+const isSmallInt = (v: unknown, max: number): v is number =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max
+
+/** room-action guess: { position, playerId }. */
+export function parseGuess(body: Record<string, unknown>): Result<{ position: number; playerId: string }> {
+  if (!isSmallInt(body.position, 15) || !isUuid(body.playerId)) return { ok: false, error: 'invalid_payload' }
+  return { ok: true, value: { position: body.position, playerId: body.playerId } }
+}
+
+/** room-admin reveal / next: { position } (istemcinin gördüğü sıra; çift dokunmaya karşı). */
+export function parsePosition(body: Record<string, unknown>): Result<number> {
+  return isSmallInt(body.position, 15) ? { ok: true, value: body.position } : { ok: false, error: 'invalid_payload' }
+}
+
+/** room-admin hide: { cell, key } (key = hücre içi sıra; madde kimliği istemciye gitmez). */
+export function parseHide(body: Record<string, unknown>): Result<{ cell: number; key: number }> {
+  if (!isSmallInt(body.cell, 15) || !isSmallInt(body.key, 2)) return { ok: false, error: 'invalid_payload' }
+  return { ok: true, value: { cell: body.cell, key: body.key } }
 }
 
 export interface ItemInput {
@@ -262,6 +304,68 @@ export interface MemberView {
   players: MemberPlayer[]
   /** Yalnızca YAZMA aşamasında. */
   writing?: WritingView
+  /** Yalnızca AÇILIŞ aşamasında. */
+  reveal?: RevealView
+  /** Yalnızca BITTI aşamasında. */
+  result?: ResultView
+}
+
+/** Hücredeki görünür madde; `key` hücre içi rastgele sıradır (gizlemek için). */
+export interface PublicItem {
+  key: number
+  text: string
+}
+
+export interface OpenCell {
+  cell: number
+  playerId: string
+  items: PublicItem[]
+}
+
+export interface ScoreRow {
+  playerId: string
+  score: number
+}
+
+/**
+ * AÇILIŞ. Açılmamış hücrelerin kime ait olduğu dönmez; o anki hücrenin yalnızca
+ * maddeleri döner. Başkalarının tahmini dönmez; admin yalnızca sayısını görür.
+ * Gösterme adımında hücrenin sahibi ve kimlerin bildiği herkese döner.
+ */
+export interface RevealView {
+  gridSize: number
+  /** Kaçıncı hücrede olunduğu (0 tabanlı) ve toplam açılacak hücre. */
+  position: number
+  total: number
+  step: 'guess' | 'shown'
+  /** O anki hücrenin ızgaradaki yeri. */
+  cell: number
+  /** O anki hücrenin görünür maddeleri. */
+  items: PublicItem[]
+  /** Tahmin edilebilecek kişiler: hücresi henüz açılmamış herkes (oyuncu sırasıyla). */
+  candidates: string[]
+  /** false: bu hücreye madde yazmakla görevliydin (cevabı biliyorsun). */
+  canGuess: boolean
+  myGuess: string | null
+  /** Yalnızca admin: kaç kişi tahmin etti / kaç kişi edebilir. */
+  guessed?: number
+  eligible?: number
+  /** Gösterme adımında: hücrenin sahibi ve doğru bilenler. */
+  target?: string
+  correct?: string[]
+  /** Açılmış hücreler (gösterme adımındaysa o anki dahil). */
+  opened: OpenCell[]
+  /** Puan azalan, eşitlikte oyuncu sırası. */
+  scores: ScoreRow[]
+}
+
+/** BITTI: dolu pusula ve tam skor tablosu. Yazarlık yine dönmez. */
+export interface ResultView {
+  gridSize: number
+  cells: OpenCell[]
+  scores: ScoreRow[]
+  /** Odanın silineceği an (ms). */
+  deletesAt: number
 }
 
 /**
@@ -310,8 +414,8 @@ export function assignmentsFor(
 
 /**
  * Üyenin görünümü. Oyuncu satırından yalnızca ad, imzalı foto adresi ve çevrimiçi
- * bilgisi çıkar. YAZMA'da `writing` eklenir (yalnızca kendi maddeleri);
- * açılış ve sonuç alanları C parçasında.
+ * bilgisi çıkar. YAZMA'da `writing` (yalnızca kendi maddeleri), AÇILIŞ'ta `reveal`,
+ * BITTI'de `result` eklenir.
  */
 export function projectMember(
   room: RoomRow,
@@ -319,6 +423,7 @@ export function projectMember(
   meId: string,
   now: number,
   myItems: readonly ItemRow[] = [],
+  revealData: { items: readonly RevealItemRow[]; guesses: readonly GuessRow[] } = { items: [], guesses: [] },
 ): MemberView {
   const sorted = [...players].sort((a, b) => a.seq - b.seq)
   const writing: WritingView | undefined =
@@ -331,6 +436,17 @@ export function projectMember(
           assignments: assignmentsFor(room.mode, players, meId, myItems),
         }
       : undefined
+  const reveal =
+    room.phase === 'reveal' ? projectReveal(room, sorted, meId, revealData.items, revealData.guesses) : null
+  const result: ResultView | null =
+    room.phase === 'done'
+      ? {
+          gridSize: room.grid_size ?? 2,
+          cells: openCells(sorted, revealData.items, Infinity),
+          scores: scoresOf(sorted),
+          deletesAt: Date.parse(room.expires_at),
+        }
+      : null
   return {
     view: 'member',
     phase: room.phase,
@@ -355,7 +471,77 @@ export function projectMember(
       online: isOnline(p.last_seen_at, now),
     })),
     ...(writing ? { writing } : {}),
+    ...(reveal ? { reveal } : {}),
+    ...(result ? { result } : {}),
   }
+}
+
+/** Hücrenin görünür maddeleri: boş ve gizlenmiş olanlar düşer, hücre içi sırayla. */
+export function visibleItems(items: readonly RevealItemRow[], targetId: string): PublicItem[] {
+  return items
+    .filter((it) => it.target_id === targetId && !it.hidden && it.ord !== null && it.text.trim() !== '')
+    .sort((a, b) => a.ord! - b.ord!)
+    .map((it) => ({ key: it.ord!, text: it.text }))
+}
+
+/** Hücresi `uptoCell` dahil açılmış oyuncular, hücre sırasıyla. */
+function openCells(players: readonly PlayerRow[], items: readonly RevealItemRow[], uptoCell: number): OpenCell[] {
+  return players
+    .filter((p) => p.cell_index !== null && p.cell_index <= uptoCell)
+    .sort((a, b) => a.cell_index! - b.cell_index!)
+    .map((p) => ({ cell: p.cell_index!, playerId: p.id, items: visibleItems(items, p.id) }))
+}
+
+/** Puan azalan; eşitlikte oyuncu (katılma) sırası. `players` seq sırasında gelmeli. */
+export function scoresOf(players: readonly PlayerRow[]): ScoreRow[] {
+  return players
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => b.p.score - a.p.score || a.i - b.i)
+    .map(({ p }) => ({ playerId: p.id, score: p.score }))
+}
+
+/** Açılış sırasındaki k. hedef (hücre sırasıyla). */
+export function revealTarget(players: readonly PlayerRow[], position: number): PlayerRow | null {
+  const ordered = players.filter((p) => p.cell_index !== null).sort((a, b) => a.cell_index! - b.cell_index!)
+  return ordered[position] ?? null
+}
+
+function projectReveal(
+  room: RoomRow,
+  players: readonly PlayerRow[],
+  meId: string,
+  items: readonly RevealItemRow[],
+  guesses: readonly GuessRow[],
+): RevealView | null {
+  const position = room.reveal_index ?? 0
+  const step = room.reveal_step ?? 'guess'
+  const target = revealTarget(players, position)
+  if (!target) return null
+  const cell = target.cell_index!
+  const authors = new Set(items.filter((it) => it.target_id === target.id).map((it) => it.author_id))
+  const shown = step === 'shown'
+  const view: RevealView = {
+    gridSize: room.grid_size ?? 2,
+    position,
+    total: players.filter((p) => p.cell_index !== null).length,
+    step,
+    cell,
+    items: visibleItems(items, target.id),
+    candidates: players.filter((p) => p.cell_index !== null && p.cell_index >= cell).map((p) => p.id),
+    canGuess: !authors.has(meId),
+    myGuess: guesses.find((g) => g.player_id === meId)?.guessed_id ?? null,
+    opened: openCells(players, items, shown ? cell : cell - 1),
+    scores: scoresOf(players),
+  }
+  if (room.admin_player_id === meId) {
+    view.guessed = guesses.length
+    view.eligible = players.filter((p) => !authors.has(p.id)).length
+  }
+  if (shown) {
+    view.target = target.id
+    view.correct = guesses.filter((g) => g.guessed_id === target.id).map((g) => g.player_id)
+  }
+  return view
 }
 
 /** Süre (ve kayıt payı) doldu mu: ilk durum isteği aşamayı ilerletir. */

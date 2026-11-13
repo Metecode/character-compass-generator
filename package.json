@@ -20,6 +20,10 @@
     "room:check": "node scripts/room-api-check.mjs",
     "room:check:write": "node scripts/room-writing-check.mjs",
     "room:e2e:write": "node scripts/room-writing-e2e.mjs",
+    "room:check:reveal": "node scripts/room-reveal-check.mjs",
+    "room:e2e:reveal": "node scripts/room-reveal-e2e.mjs",
+    "room:png": "node scripts/room-png-check.mjs",
+    "game:check": "node scripts/game-api-check.mjs",
     "room:e2e": "node scripts/room-e2e.mjs"
   },
   "dependencies": {

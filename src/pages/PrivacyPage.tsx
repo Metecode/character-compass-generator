@@ -111,7 +111,8 @@ export default function PrivacyPage() {
         </p>
         <p>
           Canlı odada admin “Odayı sil”e basınca oda her şeyiyle hemen silinir. Oyun başlamadan
-          “Odadan çık” dersen adın ve fotoğrafın hemen silinir.
+          “Odadan çık” dersen adın ve fotoğrafın hemen silinir. Oyun sonunda indirdiğin PNG ya da
+          düzenleyiciye aktardığın pusula yalnızca senin cihazında kalır; sunucuya gönderilmez.
         </p>
         <p>
           Pusulada sen varsın ve silinmesini istiyorsan linki paylaşan kişiye ya da aşağıdaki adrese
