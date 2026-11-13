@@ -21,6 +21,24 @@ describe('sunucu limitleri ön yüzle aynı', () => {
     expect(server.PHOTOS_MAX * server.PHOTO_MAX_BYTES + 64 * 1024).toBeLessThan(server.MAX_BODY_BYTES)
   })
 
+  it('tahmin oyunu sınırları', () => {
+    expect(server.PLAYER_NAME_MAX).toBe(client.PLAYER_NAME_MAX)
+    expect(server.BLUR_SIZE).toBe(client.BLUR_SIZE)
+    expect(server.BLUR_MAX_BYTES).toBe(client.BLUR_MAX_BYTES)
+    expect(server.GUESSES_MAX).toBe(200)
+    expect(server.SIGNED_URL_SECONDS).toBe(600)
+    expect(server.RATE_LIMITS['submit-guess']).toEqual({ max: 30, windowSeconds: 3600 })
+    expect(server.RATE_LIMITS['get-game'].max).toBe(120)
+    expect(server.RATE_LIMITS['use-hint'].max).toBe(120)
+    expect(server.RATE_LIMITS['game-stats'].max).toBe(60)
+  })
+
+  it('16 foto + 16 bulanık dosya + JSON gövde sınıra sığar', () => {
+    expect(
+      server.PHOTOS_MAX * (server.PHOTO_MAX_BYTES + server.BLUR_MAX_BYTES) + 64 * 1024,
+    ).toBeLessThan(server.MAX_BODY_BYTES)
+  })
+
   it('create-game: saatte 5', () => {
     expect(server.RATE_LIMITS['create-game']).toEqual({ max: 5, windowSeconds: 3600 })
   })

@@ -37,6 +37,19 @@ export async function renderCompassPng(node: HTMLElement, photoIds: string[]): P
   // Yalnızca IndexedDB'de gerçekten bulunan fotolar ekrana gelir.
   const urls = await Promise.all(photoIds.map((id) => getPhotoUrl(id).catch(() => null)))
   await waitForPhotos(node, urls.filter(Boolean).length)
+  return nodeToPng(node)
+}
+
+/**
+ * Herhangi bir 1080×1080 düğümü PNG'ye çevirir (tahmin oyunu skor kartı).
+ * Fontlar beklenir; `.editor-only` öğeler çıkarılır.
+ */
+export async function renderNodePng(node: HTMLElement): Promise<Blob> {
+  await waitForFonts()
+  return nodeToPng(node)
+}
+
+async function nodeToPng(node: HTMLElement): Promise<Blob> {
   const svg = await domToForeignObjectSvg(node, {
     width: CANVAS_SIZE,
     height: CANVAS_SIZE,

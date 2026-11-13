@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { parseDuration, photoFieldIndex, validateGame } from '../validate.ts'
+import { blurFieldIndex, parseDuration, photoFieldIndex, validateBlur, validateGame } from '../validate.ts'
 import { emptyCell, fakeJpeg, filledCell, payload, photosFor } from './fixtures.ts'
 
 const errorOf = (data: unknown, photos = photosFor(0, 1)) => {
@@ -162,5 +162,43 @@ describe('validateGame: fotoğraflar', () => {
       const cells = [{ ...filledCell('A'), photo }, filledCell(), filledCell(), filledCell()]
       expect(errorOf(payload({ cells }), [])).toBe('invalid_cells')
     }
+  })
+})
+
+describe('bulanık ipucu dosyaları (blur_N)', () => {
+  const blur = (i: number, bytes = fakeJpeg(32, 32)) => ({ field: `blur_${i}`, bytes })
+
+  it('alan adı: blur_0 … blur_15', () => {
+    expect(blurFieldIndex('blur_0')).toBe(0)
+    expect(blurFieldIndex('blur_15')).toBe(15)
+    expect(blurFieldIndex('blur_16')).toBeNull()
+    expect(blurFieldIndex('blur_01')).toBeNull()
+    expect(blurFieldIndex('photo_0')).toBeNull()
+  })
+
+  it('JPEG, tam 32×32 ve en fazla 5 KB', () => {
+    expect(validateBlur(fakeJpeg(32, 32))).toBeNull()
+    expect(validateBlur(fakeJpeg(32, 32, { padTo: 5 * 1024 }))).toBeNull()
+    expect(validateBlur(fakeJpeg(32, 32, { padTo: 5 * 1024 + 1 }))).toBe('blur_invalid')
+    expect(validateBlur(fakeJpeg(33, 32))).toBe('blur_invalid')
+    expect(validateBlur(fakeJpeg(400, 400))).toBe('blur_invalid')
+    expect(validateBlur(new TextEncoder().encode('<svg/>'))).toBe('blur_invalid')
+  })
+
+  it('geriye uyumlu: bulanık dosya olmadan da geçerli, blurs boş', () => {
+    const r = validateGame(payload(), photosFor(0, 1))
+    expect(r.ok && r.value.blurs.size).toBe(0)
+  })
+
+  it('photo_N ile birlikte kabul edilir; foto sayısı sınırına sayılmaz', () => {
+    const r = validateGame(payload(), [...photosFor(0, 1), blur(0), blur(1)])
+    expect(r.ok && [...r.value.blurs.keys()].sort()).toEqual([0, 1])
+    expect(r.ok && r.value.photos.size).toBe(2)
+  })
+
+  it('karşılığı olmayan, tekrarlanan ya da geçersiz bulanık dosya reddedilir', () => {
+    expect(errorOf(payload(), [...photosFor(0, 1), blur(2)])).toBe('blur_invalid')
+    expect(errorOf(payload(), [...photosFor(0, 1), blur(0), blur(0)])).toBe('blur_invalid')
+    expect(errorOf(payload(), [...photosFor(0, 1), blur(0, fakeJpeg(400, 400))])).toBe('blur_invalid')
   })
 })

@@ -1,4 +1,4 @@
-import { forwardRef, useRef } from 'react'
+import { Fragment, forwardRef, useRef } from 'react'
 import {
   BAND_LABEL_WIDTH,
   CANVAS_SIZE,
@@ -18,6 +18,11 @@ interface Props {
   compass: Compass
   selectedId: string | null
   onSelect: (id: string) => void
+  /**
+   * Hücreyi başka biçimde çizmek için (tahmin oyunu). Verilirse düzen, bantlar
+   * ve imza aynı kalır; hücrenin içi bu fonksiyondan gelir.
+   */
+  renderCell?: (index: number, color: string, scale: number) => React.ReactNode
 }
 
 const QUADRANTS = [0, 1, 2, 3] as const
@@ -47,13 +52,14 @@ function BandLabel({ region }: { region: Region }) {
  * transform: scale ile küçültülür; export bu düğümden alınır.
  */
 export const CompassArt = forwardRef<HTMLDivElement, Props>(function CompassArt(
-  { compass, selectedId, onSelect },
+  { compass, selectedId, onSelect, renderCell: customCell },
   ref,
 ) {
   const { quadrants, bands, cells, gridSize, uppercaseNames } = compass
   const scale = CELL_SCALE[gridSize]
 
   const renderCell = (i: number, color: string) => {
+    if (customCell) return <Fragment key={i}>{customCell(i, color, scale)}</Fragment>
     const cell = cells[i]
     if (!cell) return null
     return (

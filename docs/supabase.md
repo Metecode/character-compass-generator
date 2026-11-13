@@ -10,9 +10,10 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 | Parça | Yer | Not |
 |---|---|---|
 | Şema, yetkiler, kova | `supabase/migrations/20261113000100_games_schema.sql` | RLS açık, policy yok; yalnızca `service_role`'a GRANT |
+| Tahmin oyunu (Aşama 3) | `supabase/migrations/20261114000100_guess_game.sql` | `guesses`, `guess_hints` (oyunla cascade silinir), `game_photos.blur_path`, `submit_guess()` |
 | Zamanlama | `supabase/migrations/20261113000200_schedules.sql` | pg_cron + pg_net; cleanup sırrı Vault'ta, DB içinde üretilir |
-| Fonksiyonlar | `supabase/functions/{create-game,delete-game,cleanup,health}` | Hepsi `verify_jwt = false`; yetki kontrolü fonksiyon içinde |
-| Ortak kod | `supabase/functions/_shared/` | `validate.ts`, `jpeg.ts`, `tokens.ts`, `http.ts`, `ip.ts` saf TS → vitest |
+| Fonksiyonlar | `supabase/functions/{create-game,delete-game,cleanup,health,get-game,use-hint,submit-guess,game-stats}` | Hepsi `verify_jwt = false`; yetki kontrolü fonksiyon içinde |
+| Ortak kod | `supabase/functions/_shared/` | `validate.ts`, `play.ts`, `jpeg.ts`, `tokens.ts`, `http.ts`, `ip.ts` saf TS → vitest; `game.ts`, `supabase.ts` Edge ortamı |
 | Uyanık tutma | `.github/workflows/keepalive.yml` | Pzt + Per 06:17 UTC, `health` → 204 |
 
 ### Uç noktalar
@@ -21,8 +22,33 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 |---|---|---|---|
 | `create-game` | Tarayıcı | `apikey` = publishable anahtar | IP başına saatte 5 |
 | `delete-game` | Tarayıcı | publishable + `delete_token` | IP başına saatte 30 |
+| `get-game` | Tarayıcı (`/g/{code}`) | publishable + `device` | IP başına saatte 120 |
+| `use-hint` | Tarayıcı | publishable + `device` | IP başına saatte 120 |
+| `submit-guess` | Tarayıcı | publishable + `device` | IP başına saatte 30; oyun başına 200 tahmin |
+| `game-stats` | Tarayıcı (Oyunlarım → İstatistik) | publishable + `delete_token` | IP başına saatte 60 |
 | `cleanup` | Yalnızca pg_cron (15 dk) | `x-cleanup-secret` (Vault'taki sır, DB'de doğrulanır) | — |
 | `health` | GitHub Actions | yok; veri döndürmez (204) | — |
+
+### Tahmin oyunu (Aşama 3)
+
+- **Oyuncuya giden veri (`get-game`):** başlık, ızgara, bölgeler, hücre başına
+  `{ bullets, playable, hint }` ve karıştırılmış isim listesi. İsim–hücre eşleşmesi, foto
+  kimliği ve dosya yolu dönmez. Bu cihaz tahmin gönderdiyse oyun yerine kendi sonucu döner.
+- **Net fotoğraflar** yalnızca tahmin gönderildikten sonra (`submit-guess` ya da tahmini olan
+  cihazın `get-game`'i) 10 dakikalık imzalı adreslerle gelir.
+- **İpucu:** oyunu kuran tarayıcı her foto için 32×32 bulanık JPEG (≤ 5 KB) üretir ve
+  `blur_N` alanında gönderir (isteğe bağlı; eski istemciler göndermez, o oyunda ipucu olmaz).
+  `use-hint` bunu base64 döner ve `guess_hints`'e yazar; o hücre doğru bilinirse yarım puan.
+- **Puan** sunucuda (`_shared/play.ts`): isimler `toLocaleLowerCase('tr')` ile, isme göre
+  karşılaştırılır; aynı adı taşıyan iki kişi birbirinin yerine sayılır. `points2` = puanın iki katı.
+- **Cihaz:** tarayıcı 128 bitlik rastgele kimlik üretir (`compass-device`); sunucuda yalnızca
+  `SHA-256(kod | cihaz)` tutulur. `(game_code, device_hash)` tekil; `submit_guess()` oyun başına
+  danışma kilidiyle 200 sınırını ve tekil cihazı tek işlemde denetler (409 `already_played` /
+  `game_full`).
+- **Silme:** `guesses` ve `guess_hints` `games`'e cascade ile bağlı; bulanık dosyalar oyunun
+  kova klasöründe. cleanup ve `delete-game` bunları ek kod olmadan kapsar.
+- **Kurucu:** `game-stats` silme anahtarıyla istatistik ve satır kimlikli sıralama döner;
+  `remove: <id>` o tahmini ve o cihazın ipuçlarını siler.
 
 ### Fonksiyon ortam değişkenleri
 
@@ -156,9 +182,33 @@ gönderirse istek 1000 ile reddediliyor). `x-real-ip` gelmiyor, istemcinin gönd
 ve `x-envoy-external-address` istemciden olduğu gibi geçiyor (güvenilmez). Varsayılan sıra
 (`cf-connecting-ip` → `x-real-ip`) doğru; `CLIENT_IP_HEADER` ayarlanmadı.
 
+### Aşama 3 doğrulaması (canlı)
+
+Betikler `fetch` ile uç noktaları çağırır (publishable anahtar, rastgele cihaz kimliği).
+
+- **a)** `get-game` yanıtında hücre alanları yalnızca `bullets, playable, hint`; isim, `photo`,
+  yol, uuid, `http` geçmez; isim listesi her istekte farklı sırada.
+- **b)** Tahminden önce: `use-hint` yalnızca 32×32 dosyayı döner; tablolar (`games`,
+  `game_photos`, `guesses`, `guess_hints`) 401; `rpc/submit_guess` reddedilir; kova listesi boş;
+  gerçek nesne yolu bilinse bile imzalatma, doğrudan okuma ve public adres reddedilir.
+- **c)** Aynı cihazdan ikinci `submit-guess` → 409 `already_played`; `get-game` sonucu döner.
+- **d)** Tahminli ve ipuçlu bir oyunun süresi SQL Editor'de geri çekilir; en geç 15 dk sonra:
+  ```sql
+  select (select count(*) from public.games where code = 'KOD') as oyun,
+         (select count(*) from public.game_photos where game_code = 'KOD') as foto,
+         (select count(*) from public.guesses where game_code = 'KOD') as tahmin,
+         (select count(*) from public.guess_hints where game_code = 'KOD') as ipucu,
+         (select count(*) from storage.objects where bucket_id = 'game-photos' and name like 'KOD/%') as dosya;
+  ```
+  Hepsi 0 olmalı.
+- **e)** İmzalı adres hemen 200, 10 dakika sonra 400 (`exp` = `iat` + 600).
+
 ## Bilinen sınırlar
 
 - `cleanup` her turda en fazla 50 süresi dolmuş oyun siler; kalanlar sonraki turda.
+- Tahmin oyununda cihaz kimliği tarayıcı deposundadır: gizli sekme ya da temizlenmiş tarayıcı
+  yeni kimlik üretir ve yeniden oynayabilir (hesap olmadığı için kabul edildi).
+- Kurucu bir oyuncuyu sıralamadan kaldırırsa o cihaz yeniden oynayabilir.
 - pg_net, istek kuyruktayken `x-cleanup-secret` başlığını `net.http_request_queue`'ya
   yazar. Sızsa bile bu sır yalnızca cleanup'ı tetikler (o da zaten 15 dakikada bir çalışır).
 - `project_url` Vault kaydı canlı adrese sabitlenmiştir; yerel `supabase start` ile cron

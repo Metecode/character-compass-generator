@@ -1,8 +1,9 @@
-import { CircleNotch, Copy, Trash } from '@phosphor-icons/react'
+import { ChartBar, CircleNotch, Copy, Trash } from '@phosphor-icons/react'
 import { useEffect, useState } from 'react'
 import { copyText, gameUrl } from '../lib/gameLink'
 import { remainingLabel, useGamesStore, type SavedGame } from '../store/gamesStore'
 import { useUiStore } from '../store/uiStore'
+import { GameStatsView } from './GameStatsView'
 import { Modal } from './Modal'
 
 /** Kalan süre yazısı yarım dakikada bir tazelenir. */
@@ -15,7 +16,7 @@ function useNow(intervalMs = 30_000): number {
   return now
 }
 
-function GameRow({ game, now }: { game: SavedGame; now: number }) {
+function GameRow({ game, now, onStats }: { game: SavedGame; now: number; onStats: () => void }) {
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const removeGame = useGamesStore((s) => s.removeGame)
@@ -75,10 +76,16 @@ function GameRow({ game, now }: { game: SavedGame; now: number }) {
             </button>
           </>
         ) : (
+          <>
+          <button type="button" className="btn" onClick={onStats}>
+            <ChartBar size={20} weight="bold" aria-hidden />
+            İstatistik
+          </button>
           <button type="button" className="btn btn-danger" onClick={() => setConfirm(true)}>
             <Trash size={20} weight="bold" aria-hidden />
             Şimdi sil
           </button>
+          </>
         )}
       </div>
     </li>
@@ -90,6 +97,8 @@ export function MyGamesDialog({ onClose }: { onClose: () => void }) {
   const games = useGamesStore((s) => s.games)
   const pruneExpired = useGamesStore((s) => s.pruneExpired)
   const now = useNow()
+  const [statsCode, setStatsCode] = useState<string | null>(null)
+  const statsGame = games.find((g) => g.code === statsCode) ?? null
 
   useEffect(() => {
     pruneExpired(now)
@@ -97,12 +106,14 @@ export function MyGamesDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="Oyunlarım" onClose={onClose}>
-      {games.length === 0 ? (
+      {statsGame ? (
+        <GameStatsView game={statsGame} onBack={() => setStatsCode(null)} />
+      ) : games.length === 0 ? (
         <p className="text-sm">Bu cihazda açık oyun linki yok.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {games.map((g) => (
-            <GameRow key={g.code} game={g} now={now} />
+            <GameRow key={g.code} game={g} now={now} onStats={() => setStatsCode(g.code)} />
           ))}
         </ul>
       )}

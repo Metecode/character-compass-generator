@@ -67,3 +67,14 @@ export const GAME_MIN_CELLS = 4
 export const GAME_PHOTO_MAX_BYTES = 150 * 1024
 /** Oyunlarım listesi (cihazda; delete_token burada durur). */
 export const GAMES_STORAGE_KEY = 'compass-games'
+
+// --- Tahmin oyunu ---
+/** Oyuncu adı en fazla bu kadar karakter. */
+export const PLAYER_NAME_MAX = 20
+/** İpucu için bulanık foto: kenar (px) ve en büyük boyut (bayt). */
+export const BLUR_SIZE = 32
+export const BLUR_MAX_BYTES = 5 * 1024
+/** Bu cihazın rastgele kimliği (tahmin oyununda cihaz başına tek deneme). */
+export const DEVICE_STORAGE_KEY = 'compass-device'
+/** Sıralamada önce gösterilen satır sayısı. */
+export const RANKING_PREVIEW = 20

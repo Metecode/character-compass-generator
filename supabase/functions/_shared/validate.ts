@@ -5,6 +5,8 @@
  * İstek (multipart/form-data):
  *   data     → JSON (aşağıdaki GamePayload)
  *   photo_N  → N. fotoğrafın JPEG baytları (N, hücrelerdeki `photo` alanının değeri)
+ *   blur_N   → isteğe bağlı: N. fotoğrafın ipucu için bulanık sürümü (32×32 JPEG, ≤ 5 KB).
+ *              Yalnızca photo_N varsa kabul edilir; hiç gönderilmezse oyunda ipucu olmaz.
  *
  * GamePayload:
  *   { title?: string, gridSize: 2|3|4, duration?: 1|24|72,
@@ -14,6 +16,8 @@
 
 import { inspectJpeg } from './jpeg.ts'
 import {
+  BLUR_MAX_BYTES,
+  BLUR_SIZE,
   BULLET_MAX,
   BULLETS_MAX,
   DEFAULT_DURATION_HOURS,
@@ -46,6 +50,7 @@ export type ValidationError =
   | 'missing_photo'
   | 'unused_photo'
   | 'duplicate_photo'
+  | 'blur_invalid'
   | 'photo_too_large'
   | 'photo_not_jpeg'
   | 'photo_wrong_size'
@@ -70,6 +75,8 @@ export interface ValidGame {
   cells: ValidCell[]
   /** Hücrelerin işaret ettiği fotolar (N → JPEG baytları). */
   photos: Map<number, Uint8Array>
+  /** İpucu için bulanık sürümler (N → JPEG baytları); her biri bir photo_N'ye ait. */
+  blurs: Map<number, Uint8Array>
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: ValidationError }
@@ -103,6 +110,22 @@ export function photoFieldIndex(field: string): number | null {
   if (!m) return null
   const n = Number(m[1])
   return n < PHOTOS_MAX ? n : null
+}
+
+/** "blur_0" … "blur_15" → 0 … 15. Başka alan adı null döner. */
+export function blurFieldIndex(field: string): number | null {
+  const m = /^blur_(0|[1-9][0-9]?)$/.exec(field)
+  if (!m) return null
+  const n = Number(m[1])
+  return n < PHOTOS_MAX ? n : null
+}
+
+/** Bulanık ipucu dosyası: JPEG, tam 32×32, en fazla 5 KB. */
+export function validateBlur(bytes: Uint8Array): ValidationError | null {
+  if (bytes.length > BLUR_MAX_BYTES) return 'blur_invalid'
+  const jpeg = inspectJpeg(bytes)
+  if (!jpeg.ok || jpeg.width !== BLUR_SIZE || jpeg.height !== BLUR_SIZE) return 'blur_invalid'
+  return null
 }
 
 export function validatePhoto(bytes: Uint8Array): ValidationError | null {
@@ -194,9 +217,22 @@ export function validateGame(
 
   // Fotolar: en fazla 16; her hücrenin işaret ettiği foto gelmeli, her gelen foto
   // tam bir hücrede kullanılmalı.
-  if (photos.length > PHOTOS_MAX) return fail('too_many_photos')
-  const byIndex = new Map<number, Uint8Array>()
+  const blurs = new Map<number, Uint8Array>()
+  const photoFields: typeof photos[number][] = []
   for (const p of photos) {
+    const b = blurFieldIndex(p.field)
+    if (b === null) {
+      photoFields.push(p)
+      continue
+    }
+    if (blurs.has(b)) return fail('blur_invalid')
+    const err = validateBlur(p.bytes)
+    if (err) return fail(err)
+    blurs.set(b, p.bytes)
+  }
+  if (photoFields.length > PHOTOS_MAX) return fail('too_many_photos')
+  const byIndex = new Map<number, Uint8Array>()
+  for (const p of photoFields) {
     const idx = photoFieldIndex(p.field)
     if (idx === null) return fail('invalid_photo_field')
     if (byIndex.has(idx)) return fail('duplicate_photo')
@@ -212,6 +248,7 @@ export function validateGame(
     used.add(c.photo)
   }
   if (used.size !== byIndex.size) return fail('unused_photo')
+  for (const b of blurs.keys()) if (!byIndex.has(b)) return fail('blur_invalid')
 
   return {
     ok: true,
@@ -222,6 +259,7 @@ export function validateGame(
       regions: regions.value,
       cells,
       photos: byIndex,
+      blurs,
     },
   }
 }

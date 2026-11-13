@@ -6,56 +6,18 @@
  * Tarayıcı tablolara ya da kovaya doğrudan erişmez; supabase-js kullanılmaz.
  */
 
-import { GAME_PHOTO_MAX_BYTES, PHOTO_SIZE } from '../constants'
+import { BLUR_MAX_BYTES, BLUR_SIZE, GAME_PHOTO_MAX_BYTES, PHOTO_SIZE } from '../constants'
+import { GameApiError, call, config } from './apiClient'
 import type { Compass } from '../types'
 import { buildGamePayload, dropMissingPhotos } from './gamePayload'
 import { getPhoto } from './photos'
+
+export { GameApiError }
 
 export interface CreatedGame {
   code: string
   expiresAt: string
   deleteToken: string
-}
-
-export class GameApiError extends Error {
-  readonly code: string
-  constructor(code: string) {
-    super(code)
-    this.code = code
-  }
-}
-
-function config(): { url: string; key: string } {
-  const url = import.meta.env.VITE_SUPABASE_URL
-  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-  if (!url || !key) throw new GameApiError('not_configured')
-  return { url: url.replace(/\/+$/, ''), key }
-}
-
-async function call(path: string, body: BodyInit, contentType?: string): Promise<unknown> {
-  const { url, key } = config()
-  const headers: Record<string, string> = { apikey: key }
-  if (contentType) headers['Content-Type'] = contentType
-  let res: Response
-  try {
-    res = await fetch(`${url}/functions/v1/${path}`, { method: 'POST', headers, body })
-  } catch {
-    throw new GameApiError('network')
-  }
-  let json: unknown = null
-  try {
-    json = await res.json()
-  } catch {
-    // gövdesiz yanıt
-  }
-  if (!res.ok) {
-    const code =
-      json && typeof json === 'object' && typeof (json as { error?: unknown }).error === 'string'
-        ? (json as { error: string }).error
-        : `http_${res.status}`
-    throw new GameApiError(code)
-  }
-  return json
 }
 
 const canvasToJpeg = (canvas: HTMLCanvasElement, quality: number): Promise<Blob> =>
@@ -95,6 +57,36 @@ export async function normalizePhoto(blob: Blob): Promise<Blob> {
   }
 }
 
+/**
+ * İpucu için bulanık sürüm: 32×32 JPEG (≤ 5 KB). Bu kadar küçültmek yüzü
+ * tanınmaz kılar; oyuncu tarafında büyütülüp ayrıca CSS ile bulanıklaştırılır.
+ * Üretilemezse null: o hücrede ipucu olmaz (oyun yine oluşturulur).
+ */
+export async function makeBlur(photo: Blob): Promise<Blob | null> {
+  try {
+    const bitmap = await createImageBitmap(photo)
+    try {
+      const canvas = document.createElement('canvas')
+      canvas.width = BLUR_SIZE
+      canvas.height = BLUR_SIZE
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return null
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(bitmap, 0, 0, BLUR_SIZE, BLUR_SIZE)
+      for (const q of [0.7, 0.5, 0.3]) {
+        const out = await canvasToJpeg(canvas, q)
+        if (out.size <= BLUR_MAX_BYTES) return out
+      }
+      return null
+    } finally {
+      bitmap.close()
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function createGame(compass: Compass, durationHours: number): Promise<CreatedGame> {
   config() // yapılandırma yoksa fotoları hiç okumadan dur
   const built = buildGamePayload(compass, durationHours)
@@ -108,7 +100,12 @@ export async function createGame(compass: Compass, durationHours: number): Promi
 
   const form = new FormData()
   form.append('data', JSON.stringify(payload))
-  photoIds.forEach((id, i) => form.append(`photo_${i}`, blobs.get(id)!, `${i}.jpg`))
+  const blurs = await Promise.all(photoIds.map((id) => makeBlur(blobs.get(id)!)))
+  photoIds.forEach((id, i) => {
+    form.append(`photo_${i}`, blobs.get(id)!, `${i}.jpg`)
+    const blur = blurs[i]
+    if (blur) form.append(`blur_${i}`, blur, `${i}.blur.jpg`)
+  })
 
   const res = (await call('create-game', form)) as {
     code?: unknown

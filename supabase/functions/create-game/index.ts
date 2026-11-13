@@ -79,6 +79,8 @@ serve('create-game', ['POST'], async (req, origin) => {
   const photoIds = new Map<number, string>()
   for (const idx of game.photos.keys()) photoIds.set(idx, crypto.randomUUID())
   const pathOf = (id: string) => `${code}/${id}.jpg`
+  // İpucu için bulanık sürüm (isteğe bağlı; eski istemciler göndermez).
+  const blurPathOf = (id: string) => `${code}/${id}.blur.jpg`
 
   const { error: insertError } = await db.from('games').insert({
     code,
@@ -102,7 +104,12 @@ serve('create-game', ['POST'], async (req, origin) => {
   try {
     if (photoIds.size > 0) {
       const { error } = await db.from('game_photos').insert(
-        [...photoIds.values()].map((id) => ({ id, game_code: code, storage_path: pathOf(id) })),
+        [...photoIds].map(([idx, id]) => ({
+          id,
+          game_code: code,
+          storage_path: pathOf(id),
+          blur_path: game.blurs.has(idx) ? blurPathOf(id) : null,
+        })),
       )
       if (error) throw new Error('photo rows insert failed')
     }
@@ -114,6 +121,14 @@ serve('create-game', ['POST'], async (req, origin) => {
           .upload(pathOf(id), bytes, { contentType: 'image/jpeg', upsert: false })
         if (error) throw new Error('photo upload failed')
         uploaded.push(pathOf(id))
+        const blur = game.blurs.get(idx)
+        if (blur) {
+          const { error: blurError } = await db.storage
+            .from(PHOTO_BUCKET)
+            .upload(blurPathOf(id), blur, { contentType: 'image/jpeg', upsert: false })
+          if (blurError) throw new Error('blur upload failed')
+          uploaded.push(blurPathOf(id))
+        }
       }),
     )
   } catch (e) {

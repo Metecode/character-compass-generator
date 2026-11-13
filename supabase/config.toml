@@ -439,3 +439,15 @@ verify_jwt = false
 
 [functions.health]
 verify_jwt = false
+
+[functions.get-game]
+verify_jwt = false
+
+[functions.use-hint]
+verify_jwt = false
+
+[functions.submit-guess]
+verify_jwt = false
+
+[functions.game-stats]
+verify_jwt = false

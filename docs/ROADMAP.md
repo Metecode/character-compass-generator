@@ -1,6 +1,6 @@
 # Character Compass — Yol Haritası
 
-Son güncelleme: 13 Kasım 2026 · Yayın: https://compass.meteucar.com
+Son güncelleme: 14 Kasım 2026 · Yayın: https://compass.meteucar.com
 
 ## 1. Ürün
 
@@ -25,6 +25,7 @@ Arkadaş grupları için "karakter pusulası" meme'i üreten web uygulaması: ı
 - Yeniden adlandırma (Character Compass), Netlify yayını, `compass.meteucar.com`.
 - iPhone'da PNG çıktısı doğrulandı.
 - **Aşama 2 — Supabase temeli (13 Kasım 2026):** şema ve migration'lar (RLS açık, policy yok, yalnızca service_role'a yetki), private foto kovası, `create-game` / `delete-game` / `cleanup` / `health` Edge Function'ları, yükleme doğrulaması (400×400 JPEG, ≤150 KB, en fazla 16 foto, gövde ≤3 MB), IP başına hız limiti (tuzlanmış özet, ≤1 saat), 15 dakikada bir temizlik (pg_cron + pg_net), GitHub Actions ile uyanık tutma, "Oyun linki oluştur" penceresi, "Oyunlarım", `/g/{code}` yer tutucu, `/gizlilik` sayfası. İşletim ve canlı doğrulama adımları: `docs/supabase.md`.
+- **Aşama 3 — Tahmin oyunu (kod ve sunucu tarafı, 14 Kasım 2026; `feature/guess-game` dalı):** `/g/{code}` oyun ekranı (ad, karışık isim listesi, mobilde alt sayfa, "6/9 yerleştirildi", sırayla açılan sonuç ve "Animasyonu geç"), ipucu (32×32 bulanık foto, yarım puan), sunucuda puanlama, cihaz başına tek deneme, oyun başına 200 tahmin, sıralama (ilk 20 + kendi satırın, "Tümünü göster"), skor kartı PNG'si, kurucu istatistiği ve "Bu oyuncuyu sıralamadan kaldır", tek "Oyun" menüsü, "Bu oyun artık yok" sayfası. Yeni uç noktalar: `get-game`, `use-hint`, `submit-guess`, `game-stats`. Sunucu tarafı canlıda; ön yüz main'e birleştirilmeyi bekliyor.
 
 ## 3. Verilen kararlar
 
@@ -75,24 +76,28 @@ Arkadaş grupları için "karakter pusulası" meme'i üreten web uygulaması: ı
 
 **Bitti sayılır:** Süresi dolan bir kaydın satırları ve dosyaları kendiliğinden siliniyor; anonim anahtarla hiçbir tablo ve dosya okunamıyor.
 
-### Aşama 3 — Tahmin oyunu (herkes kendi zamanında)
+### Aşama 3 — Tahmin oyunu (herkes kendi zamanında) ✅ Kod tamam
+
+> Sunucu tarafı (migration + fonksiyonlar) 14 Kasım 2026'da canlıya alındı ve a–e maddeleri canlıda doğrulandı (`docs/supabase.md` → "Aşama 3 doğrulaması"). Ön yüz `feature/guess-game` dalında. "Bitti sayılır" ölçütünün gerçek grupla denenmesi bekleniyor.
 
 Akış:
 
 1. Kurucu "Oyun linki oluştur" der, süreyi seçer; pusulanın o anki hali fotoğraflarla birlikte sunucuya kopyalanır. Yayınlamadan önce uyarı: "Bu pusuladaki kişilerin haberi olsun; içerik seçtiğin süre sonunda silinir."
 2. Oyuncu linki açar, ad yazar.
-3. Izgara görünür; foto ve isimler kapalı, maddeler açık. Altta isimlerin karışık listesi. Hücreye dokunup isim seçer ya da ismi sürükler.
+3. Izgara görünür; foto ve isimler kapalı, maddeler açık. Boş hücreler tahmin edilmez. Hücreye dokununca isim listesi açılır (mobilde alt sayfa); atanmış isim işaretli görünür ve başka hücreye taşınabilir. "6/9 yerleştirildi"; hepsi dolunca "Gönder".
 4. Gönderince hücreler sırayla açılır (foto ve isim), skor çıkar ("9'da 6").
 5. Linke özel sıralama tablosu.
 6. Paylaşılabilir skor kartı (PNG, altında link).
 
 Kurallar:
 
-- **İpucu:** Bulanık foto açılabilir, o hücre yarım puan sayılır. Bulanık sürüm sunucuda üretilir; net foto tahminden önce gönderilmez.
-- **Tek deneme:** Cihaz başına bir deneme.
-- **Kurucu istatistiği:** En kolay tanınan ve kimsenin bilemediği kişi.
+- **İpucu:** Bulanık foto açılabilir, o hücre yarım puan sayılır. **Karar değişti:** bulanık sürümü (32×32 JPEG, ≤ 5 KB) oyunu kuran tarayıcı üretir ve asıl fotoğrafla yükler; sunucu doğrular. Bulanık dosyası olmayan oyunda ipucu yok. Net foto tahminden önce gönderilmez; sonra 10 dakikalık imzalı adresle gelir.
+- **Tek deneme:** Cihaz başına bir deneme (tarayıcıda rastgele cihaz kimliği, sunucuda yalnızca oyuna bağlı özeti). Aynı cihaz linki yeniden açarsa kendi sonucunu görür. Oyun başına en fazla 200 tahmin.
+- **Kurucu istatistiği:** Kaç kişi oynadı, en kolay tanınan ve kimsenin bilemediği kişi; "Bu oyuncuyu sıralamadan kaldır" (tahmini silinir).
+- **Sıralama:** Puan azalan, eşitlikte önce gönderen; ekranda ilk 20 + bu cihazın satırı, "Tümünü göster". Cevap içermez.
+- **Skor kartı:** 1080×1080 PNG; oyun başlığı, "9'da 6 bildim", kısa çağrı ve site adresi. Başkalarının adı ya da fotoğrafı yok.
 - **Kopya önleme:** Fotoğraflar ve isim eşleşmesi tahmin gönderilmeden tarayıcıya gelmez; skoru sunucu hesaplar.
-- **Süre bitince:** Link "bu oyunun süresi doldu" sayfası gösterir.
+- **Süre bitince:** Süresi dolmuş, silinmiş ya da geçersiz kod için tek tip "Bu oyun artık yok" sayfası. Tahminler ve ipuçları oyunla birlikte silinir.
 
 **Bitti sayılır:** Bir grup linkten oynadı, sıralama doğru, cevaplar ağ trafiğinden görülemiyor, süre dolunca her şey silinmiş.
 
