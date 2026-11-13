@@ -100,7 +100,7 @@ async function waitForNames(page, expected, timeout = 15000) {
 try {
   // 1) Admin odayı kurar
   const admin = await newPlayer('Admin', false)
-  await admin.page.goto(`${BASE}/`)
+  await admin.page.goto(`${BASE}/?oda=1`) // gizli giriş bayrağı
   await admin.page.getByRole('button', { name: 'Oyun', exact: true }).filter({ visible: true }).first().click()
   await admin.page.getByRole('menuitem', { name: /Canlı oda kur/ }).click()
   const dialog = admin.page.getByRole('dialog', { name: 'Canlı oda kur' })

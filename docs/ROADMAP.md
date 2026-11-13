@@ -108,6 +108,9 @@ Kurallar:
 > lobi, canlı sinyal (public Broadcast + gizli `channel_id`), 5 sn yoklamaya düşme, yeniden bağlanma,
 > admin devri; sunucu canlıda, ön yüz dalda. Ayrıntı ve doğrulama: `docs/supabase.md` → "Canlı oda".
 > Sıradaki: B (atama ve yazma), C (açılış, skor, sonuç, silme).
+> **Geçici gizli giriş:** "Canlı oda kur" menüde yalnızca cihazda bayrak varsa görünür
+> (`/?oda=1` yazar, `/?oda=0` siler; `src/lib/roomFlag.ts`). `/r/{kod}` bayraksız çalışır.
+> C bitince bayrak ve `roomFlag.ts` kaldırılacak.
 
 "Ortak doldurma" fikrinin yerine geçer.
 

@@ -5,6 +5,9 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Root } from './Root.tsx'
 import './index.css'
+import { applyRoomFlagFromUrl } from './lib/roomFlag'
+
+applyRoomFlagFromUrl()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
