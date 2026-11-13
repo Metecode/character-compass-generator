@@ -48,7 +48,10 @@ Elle verilecekler (`npx supabase secrets set …`):
 2. **Dashboard kontrolü** (kullanıcı, 1 dk): Settings → API Keys'te bir publishable ve bir
    secret anahtar olduğunu, Integrations → Data API'de "Automatically expose new tables"ın
    kapalı olduğunu gör.
-3. **Migration'lar**: `npx supabase db push` → iki migration uygulanır.
+3. **Migration'lar**: `npx supabase db push --remote` → iki migration uygulanır.
+   (CLI v3'te `db push` ve `db query` varsayılan olarak yerel yığını hedefler; `--remote`
+   verilmezse 127.0.0.1:54322'ye bağlanmaya çalışıp hata verir. Ajan modunda canlıyı
+   değiştiren komutlar ayrıca `--yes` ister; salt okuma sorguları `--read-only` ile çalışır.)
 4. **Tuz** (değer ekrana basılmadan):
    ```sh
    npx supabase secrets set RATE_LIMIT_SALT="$(openssl rand -hex 32)"
@@ -132,15 +135,26 @@ tarafından yazıldığını görmek için:
 1. `supabase/probes/ip-probe.ts` → `supabase/functions/ip-probe/index.ts` kopyala,
    `config.toml`'a `[functions.ip-probe]` + `verify_jwt = false` ekle,
    `npx supabase functions deploy ip-probe`.
-2. Gerçek IP'ni öğren (`curl -s https://api.ipify.org`), sonra sahte başlıklarla çağır:
+2. Gerçek IP'ni öğren (`curl -s https://api.ipify.org`), sonra sahte başlıkları **tek tek** dene
+   (Cloudflare, istemcinin gönderdiği `cf-connecting-ip`'i "error code: 1000" ile reddeder;
+   hepsini aynı istekte göndermek bu yüzden sonuç vermez):
    ```sh
-   curl -s "$URL/functions/v1/ip-probe" \
-     -H 'x-forwarded-for: 6.6.6.6' -H 'x-real-ip: 6.6.6.6' -H 'cf-connecting-ip: 6.6.6.6' -H 'true-client-ip: 6.6.6.6'
+   for h in cf-connecting-ip x-real-ip x-forwarded-for true-client-ip; do
+     echo "== $h"; curl -s "$URL/functions/v1/ip-probe" -H "$h: 6.6.6.6"; echo
+   done
    ```
 3. Değeri gerçek IP'n olan ve `6.6.6.6` ile ezilemeyen başlık, platformun yazdığıdır.
    `x-forwarded-for` gibi listelerde en sağdaki değer kullanılır (`_shared/ip.ts`).
 4. Gerekirse `npx supabase secrets set CLIENT_IP_HEADER=<başlık>`.
 5. Temizlik: `npx supabase functions delete ip-probe`, kopyalanan klasörü ve config satırını sil.
+
+**Sonuç (13 Kasım 2026):** Platformun yazdığı başlık `cf-connecting-ip` (gerçek IP; istemci
+gönderirse istek 1000 ile reddediliyor). `x-real-ip` gelmiyor, istemcinin gönderdiği silinir.
+`x-forwarded-for` istemcinin değerini atıp `gerçek, gerçek, <vekil>` biçiminde yeniden yazılıyor;
+**en sağdaki değer bir AWS vekili (99.82.x / 99.83.x)**, istemci değil. Bu yüzden
+`CLIENT_IP_HEADER=x-forwarded-for` kullanılmamalı. `true-client-ip`, `x-client-ip`, `forwarded`
+ve `x-envoy-external-address` istemciden olduğu gibi geçiyor (güvenilmez). Varsayılan sıra
+(`cf-connecting-ip` → `x-real-ip`) doğru; `CLIENT_IP_HEADER` ayarlanmadı.
 
 ## Bilinen sınırlar
 

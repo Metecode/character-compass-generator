@@ -66,7 +66,7 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="İletişim">
-        <p>{CONTACT || '—'}</p>
+        <p>{CONTACT || 'i.meteucar@gmail.com'}</p>
       </Section>
     </PageShell>
   )
