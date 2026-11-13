@@ -94,8 +94,9 @@ Kurallar:
 - **İpucu:** Bulanık foto açılabilir, o hücre yarım puan sayılır. **Karar değişti:** bulanık sürümü (32×32 JPEG, ≤ 5 KB) oyunu kuran tarayıcı üretir ve asıl fotoğrafla yükler; sunucu doğrular. Bulanık dosyası olmayan oyunda ipucu yok. Net foto tahminden önce gönderilmez; sonra 10 dakikalık imzalı adresle gelir.
 - **Tek deneme:** Cihaz başına bir deneme (tarayıcıda rastgele cihaz kimliği, sunucuda yalnızca oyuna bağlı özeti). Aynı cihaz linki yeniden açarsa kendi sonucunu görür. Oyun başına en fazla 200 tahmin.
 - **Kurucu istatistiği:** Kaç kişi oynadı, en kolay tanınan ve kimsenin bilemediği kişi; "Bu oyuncuyu sıralamadan kaldır" (tahmini silinir).
-- **Sıralama:** Puan azalan, eşitlikte önce gönderen; ekranda ilk 20 + bu cihazın satırı, "Tümünü göster". Cevap içermez.
-- **Skor kartı:** 1080×1080 PNG; oyun başlığı, "9'da 6 bildim", kısa çağrı ve site adresi. Başkalarının adı ya da fotoğrafı yok.
+- **Sıralama:** Puan azalan, eşitlikte çözme süresi artan, o da eşitse önce gönderen; ekranda ilk 20 + bu cihazın satırı, "Tümünü göster". Cevap içermez.
+- **Çözme süresi (15 Kasım 2026):** Oyuncu adını girip başlayınca sunucu başlangıcı kaydeder (cihaz başına bir kez, yenileme sıfırlamaz); süreyi gönderimde sunucu hesaplar. Sonuçta, sıralamada ve skor kartında görünür ("1 dk 42 sn"); oyun sırasında sayaç yok. Başlangıç kaydı olmayan (eski) tahminler süresiz, eşitlikte en altta.
+- **Skor kartı:** 1080×1080 PNG; oyun başlığı, "9'da 6 bildim · 1 dk 42 sn", kısa çağrı ve site adresi. Başkalarının adı ya da fotoğrafı yok.
 - **Kopya önleme:** Fotoğraflar ve isim eşleşmesi tahmin gönderilmeden tarayıcıya gelmez; skoru sunucu hesaplar.
 - **Süre bitince:** Süresi dolmuş, silinmiş ya da geçersiz kod için tek tip "Bu oyun artık yok" sayfası. Tahminler ve ipuçları oyunla birlikte silinir.
 

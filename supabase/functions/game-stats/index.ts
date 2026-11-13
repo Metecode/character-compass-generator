@@ -13,7 +13,7 @@
 
 import { errorJson, json } from '../_shared/http.ts'
 import { guessesOf, loadLiveGame, readJson } from '../_shared/game.ts'
-import { gameStats, isPlayable, ranking } from '../_shared/play.ts'
+import { gameStats, isPlayable, ranking, sortGuesses } from '../_shared/play.ts'
 import { adminClient, checkRateLimit, hasPublishableKey, serve } from '../_shared/supabase.ts'
 import { GAME_CODE_PATTERN, verifyDeleteToken } from '../_shared/tokens.ts'
 
@@ -56,12 +56,10 @@ serve('game-stats', ['POST'], async (req, origin) => {
     }
   }
 
-  // guessesOf zaten sıralama düzeninde döner (puan azalan, önce gönderen).
   const guesses = await guessesOf(db, code)
   const ranked = ranking(guesses, null)
-  const idByOrder = [...guesses]
-    .sort((a, b) => b.points2 - a.points2 || Date.parse(a.created_at) - Date.parse(b.created_at))
-    .map((g) => g.id)
+  // ranking ile aynı düzen: satır kimlikleri sırayla eşleşir.
+  const idByOrder = sortGuesses(guesses).map((g) => g.id)
 
   return json(
     {
@@ -69,7 +67,13 @@ serve('game-stats', ['POST'], async (req, origin) => {
       expiresAt: game.expires_at,
       total: game.cells.filter(isPlayable).length,
       stats: gameStats(game.cells, guesses),
-      ranking: ranked.map((r, i) => ({ id: idByOrder[i]!, rank: r.rank, name: r.name, points2: r.points2 })),
+      ranking: ranked.map((r, i) => ({
+        id: idByOrder[i]!,
+        rank: r.rank,
+        name: r.name,
+        points2: r.points2,
+        durationSeconds: r.durationSeconds,
+      })),
     },
     200,
     origin,

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { canShareFiles, downloadBlob, fileNameFor, renderNodePng } from '../../lib/exportPng'
-import { scoreLabel } from '../../lib/play'
+import { formatDuration, scoreLabel } from '../../lib/play'
 import type { PlayedResult } from '../../lib/playApi'
 import { PlayBoard } from './PlayBoard'
 import { PlayCell } from './PlayCell'
@@ -89,6 +89,9 @@ export function ResultView({ result, animate }: Props) {
             'Cevaplar açılıyor…'
           )}
         </p>
+        {done && result.durationSeconds != null && (
+          <p className="mt-1 text-lg font-bold">Süre: {formatDuration(result.durationSeconds)}</p>
+        )}
         <p className="mt-1 text-sm text-muted">
           {result.playerName} olarak oynadın. İpucu açılan hücreler doğruysa yarım puan sayıldı.
         </p>
@@ -157,7 +160,13 @@ export function ResultView({ result, animate }: Props) {
       {sharing &&
         createPortal(
           <div aria-hidden className="pointer-events-none fixed top-0 -left-[20000px]">
-            <ScoreCard ref={cardRef} title={result.title} points2={points2} total={total} />
+            <ScoreCard
+              ref={cardRef}
+              title={result.title}
+              points2={points2}
+              total={total}
+              durationSeconds={result.durationSeconds}
+            />
           </div>,
           document.body,
         )}

@@ -11,8 +11,9 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 |---|---|---|
 | Şema, yetkiler, kova | `supabase/migrations/20261113000100_games_schema.sql` | RLS açık, policy yok; yalnızca `service_role`'a GRANT |
 | Tahmin oyunu (Aşama 3) | `supabase/migrations/20261114000100_guess_game.sql` | `guesses`, `guess_hints` (oyunla cascade silinir), `game_photos.blur_path`, `submit_guess()` |
+| Çözme süresi | `supabase/migrations/20261115000100_solve_time.sql` | `guess_starts` (cascade), `guesses.duration_seconds`, `start_guess()`; `submit_guess()` süreyi yazar |
 | Zamanlama | `supabase/migrations/20261113000200_schedules.sql` | pg_cron + pg_net; cleanup sırrı Vault'ta, DB içinde üretilir |
-| Fonksiyonlar | `supabase/functions/{create-game,delete-game,cleanup,health,get-game,use-hint,submit-guess,game-stats}` | Hepsi `verify_jwt = false`; yetki kontrolü fonksiyon içinde |
+| Fonksiyonlar | `supabase/functions/{create-game,delete-game,cleanup,health,get-game,start-game,use-hint,submit-guess,game-stats}` | Hepsi `verify_jwt = false`; yetki kontrolü fonksiyon içinde |
 | Ortak kod | `supabase/functions/_shared/` | `validate.ts`, `play.ts`, `jpeg.ts`, `tokens.ts`, `http.ts`, `ip.ts` saf TS → vitest; `game.ts`, `supabase.ts` Edge ortamı |
 | Uyanık tutma | `.github/workflows/keepalive.yml` | Pzt + Per 06:17 UTC, `health` → 204 |
 
@@ -23,6 +24,7 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 | `create-game` | Tarayıcı | `apikey` = publishable anahtar | IP başına saatte 5 |
 | `delete-game` | Tarayıcı | publishable + `delete_token` | IP başına saatte 30 |
 | `get-game` | Tarayıcı (`/g/{code}`) | publishable + `device` | IP başına saatte 120 |
+| `start-game` | Tarayıcı (ad girilip oyuna başlanınca) | publishable + `device` | IP başına saatte 120 |
 | `use-hint` | Tarayıcı | publishable + `device` | IP başına saatte 120 |
 | `submit-guess` | Tarayıcı | publishable + `device` | IP başına saatte 30; oyun başına 200 tahmin |
 | `game-stats` | Tarayıcı (Oyunlarım → İstatistik) | publishable + `delete_token` | IP başına saatte 60 |
@@ -45,8 +47,15 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
   `SHA-256(kod | cihaz)` tutulur. `(game_code, device_hash)` tekil; `submit_guess()` oyun başına
   danışma kilidiyle 200 sınırını ve tekil cihazı tek işlemde denetler (409 `already_played` /
   `game_full`).
-- **Silme:** `guesses` ve `guess_hints` `games`'e cascade ile bağlı; bulanık dosyalar oyunun
+- **Silme:** `guesses`, `guess_hints` ve `guess_starts` `games`'e cascade ile bağlı; bulanık dosyalar oyunun
   kova klasöründe. cleanup ve `delete-game` bunları ek kod olmadan kapsar.
+- **Çözme süresi:** oyuncu adını girip oyuna başlayınca `start-game` cihaz için başlangıcı
+  `guess_starts`'a yazar; yalnızca ilk seferde (`on conflict do nothing`), yenileme sıfırlamaz.
+  `submit_guess()` süreyi sunucu saatiyle hesaplar (`now() - started_at`, saniye) ve
+  `guesses.duration_seconds`'a yazar. Başlangıç yoksa tahmin yine kabul edilir, süre boş kalır.
+  Sıralama: puan azalan, süre artan (boş en sonda), o da eşitse önce gönderen
+  (`_shared/play.ts` → `compareGuesses`). Oyun sırasında sayaç gösterilmez; başlangıç zamanı
+  istemciye dönmez.
 - **Kurucu:** `game-stats` silme anahtarıyla istatistik ve satır kimlikli sıralama döner;
   `remove: <id>` o tahmini ve o cihazın ipuçlarını siler.
 

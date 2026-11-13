@@ -451,3 +451,6 @@ verify_jwt = false
 
 [functions.game-stats]
 verify_jwt = false
+
+[functions.start-game]
+verify_jwt = false

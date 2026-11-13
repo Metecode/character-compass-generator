@@ -1,7 +1,10 @@
 // @vitest-environment node
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   cleanHints,
+  compareGuesses,
   cleanPlayerName,
   deviceHash,
   gameStats,
@@ -180,31 +183,95 @@ describe('cleanHints', () => {
   })
 })
 
-const row = (name: string, points2: number, at: string, device = name): GuessRow => ({
+const row = (
+  name: string,
+  points2: number,
+  at: string,
+  duration: number | null = null,
+  device = name,
+): GuessRow => ({
   id: name,
   device_hash: device,
   player_name: name,
   answers: [],
   hints: [],
   points2,
+  duration_seconds: duration,
   created_at: at,
 })
 
-describe('ranking', () => {
-  it('puan azalan, eşitlikte önce gönderen; eşit puanlı aynı sırayı paylaşır', () => {
+describe('ranking (skor, süre, gönderim zamanı)', () => {
+  it('puan azalan; eşitlikte süre artan; o da eşitse önce gönderen', () => {
     const r = ranking(
       [
-        row('C', 4, '2026-11-13T10:02:00Z'),
-        row('A', 6, '2026-11-13T10:05:00Z'),
-        row('B', 4, '2026-11-13T10:01:00Z'),
+        row('Yavaş', 8, '2026-11-13T10:01:00Z', 300),
+        row('Hızlı', 8, '2026-11-13T10:09:00Z', 95),
+        row('Lider', 10, '2026-11-13T10:20:00Z', 900),
+        row('İkiz2', 6, '2026-11-13T10:07:00Z', 60),
+        row('İkiz1', 6, '2026-11-13T10:03:00Z', 60),
       ],
-      'C',
+      'Hızlı',
     )
-    expect(r.map((e) => [e.rank, e.name, e.me])).toEqual([
-      [1, 'A', false],
-      [2, 'B', false],
-      [2, 'C', true],
+    expect(r.map((e) => [e.rank, e.name, e.durationSeconds, e.me])).toEqual([
+      [1, 'Lider', 900, false],
+      [2, 'Hızlı', 95, true],
+      [3, 'Yavaş', 300, false],
+      // Aynı puan ve aynı süre: önce gönderen önde, sırayı paylaşırlar.
+      [4, 'İkiz1', 60, false],
+      [4, 'İkiz2', 60, false],
     ])
+  })
+
+  it('başlangıcı olmayan (süresi boş) tahmin kabul edilir ve eşitlikte en alta düşer', () => {
+    const r = ranking(
+      [
+        row('Eski', 8, '2026-11-13T09:00:00Z', null),
+        row('Süreli', 8, '2026-11-13T10:00:00Z', 400),
+        row('Az puan', 6, '2026-11-13T08:00:00Z', 10),
+      ],
+      null,
+    )
+    expect(r.map((e) => [e.rank, e.name, e.durationSeconds])).toEqual([
+      [1, 'Süreli', 400],
+      [2, 'Eski', null],
+      [3, 'Az puan', 10],
+    ])
+  })
+
+  it('iki süresiz tahmin: önce gönderen önde', () => {
+    const r = ranking([row('B', 4, '2026-11-13T10:02:00Z'), row('A', 4, '2026-11-13T10:01:00Z')], null)
+    expect(r.map((e) => [e.rank, e.name])).toEqual([
+      [1, 'A'],
+      [1, 'B'],
+    ])
+  })
+
+  it('compareGuesses sunucu sorgusuyla aynı düzende', () => {
+    const rows = [row('c', 4, '2026-11-13T10:00:00Z', null), row('b', 4, '2026-11-13T10:00:00Z', 50), row('a', 6, '2026-11-13T11:00:00Z')]
+    expect([...rows].sort(compareGuesses).map((x) => x.player_name)).toEqual(['a', 'b', 'c'])
+  })
+})
+
+describe('başlangıç kaydı (migration)', () => {
+  const sql = readFileSync(
+    fileURLToPath(new URL('../../../migrations/20261115000100_solve_time.sql', import.meta.url)),
+    'utf8',
+  )
+  it('yalnızca ilk seferde yazılır: çakışmada hiçbir şey yapılmaz, started_at güncellenmez', () => {
+    const fn = sql.slice(sql.indexOf('create function public.start_guess'), sql.indexOf('create or replace function'))
+    expect(fn).toMatch(/on conflict \(game_code, device_hash\) do nothing/)
+    expect(fn).not.toMatch(/update\s/i)
+    expect(fn).not.toMatch(/do update/i)
+  })
+  it('oyunla birlikte silinir (cascade) ve yalnızca service_role erişir', () => {
+    expect(sql).toMatch(/guess_starts \([\s\S]*references public\.games \(code\) on delete cascade/)
+    expect(sql).toMatch(/revoke all on table public\.guess_starts from public, anon, authenticated/)
+    expect(sql).toMatch(/alter table public\.guess_starts enable row level security/)
+  })
+  it('süre sunucu saatiyle hesaplanır; başlangıç yoksa boş kalır', () => {
+    expect(sql).toMatch(/v_duration := greatest\(0, floor\(extract\(epoch from \(now\(\) - v_started\)\)\)::integer\)/)
+    expect(sql).toMatch(/if v_started is not null then/)
+    expect(sql).toMatch(/add column duration_seconds integer/)
   })
 })
 

@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenGame } from '../../lib/playApi'
 
 const submitGuess = vi.fn()
+const startGame = vi.fn()
 vi.mock('../../lib/playApi', async (orig) => ({
   ...(await orig<typeof import('../../lib/playApi')>()),
   submitGuess: (...args: unknown[]) => submitGuess(...args),
+  startGame: (...args: unknown[]) => startGame(...args),
   requestHint: vi.fn(),
 }))
 
@@ -42,6 +44,8 @@ beforeEach(() => {
   )
   localStorage.clear()
   submitGuess.mockReset()
+  startGame.mockReset()
+  startGame.mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -73,6 +77,20 @@ const picker = () => screen.getByRole('dialog', { name: /hücre için isim seç/
 const pick = (name: string) => fireEvent.click(within(picker()).getByRole('button', { name: new RegExp(`^${name}`) }))
 
 describe('PlayView', () => {
+  it('oyuna başlayınca sunucuya başlangıç bildirilir; hata oyunu durdurmaz', async () => {
+    startGame.mockRejectedValueOnce(new GameApiError('network'))
+    setup()
+    await waitFor(() => expect(startGame).toHaveBeenCalled())
+    expect(startGame.mock.calls[0]![0]).toBe('ABCDEFGHIJKL')
+    expect(screen.getByText('0/3 yerleştirildi')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('oyun sırasında sayaç ya da süre gösterilmez', () => {
+    setup()
+    expect(screen.queryByText(/\d+ (sn|dk)\b/)).toBeNull()
+  })
+
   it('boş hücre tahmin edilmez (tıklanamaz); ilerleme ve Gönder', () => {
     setup()
     expect(cell(2).getAttribute('role')).toBeNull()

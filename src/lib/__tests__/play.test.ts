@@ -3,6 +3,7 @@ import {
   answersOf,
   classifyPlayError,
   cleanPlayerName,
+  formatDuration,
   formatPoints,
   locative,
   nextOpenCell,
@@ -28,6 +29,26 @@ describe('puan yazımı', () => {
     expect(scoreLabel(12, 9)).toBe("9'da 6")
     expect(scoreLabel(13, 9)).toBe("9'da 6,5")
     expect(scoreLabel(8, 4)).toBe("4'te 4")
+  })
+})
+
+describe('süre yazımı', () => {
+  it('sn, dk sn, sa dk', () => {
+    expect(formatDuration(0)).toBe('0 sn')
+    expect(formatDuration(42)).toBe('42 sn')
+    expect(formatDuration(60)).toBe('1 dk')
+    expect(formatDuration(102)).toBe('1 dk 42 sn')
+    expect(formatDuration(3599)).toBe('59 dk 59 sn')
+    expect(formatDuration(3600)).toBe('1 sa')
+    expect(formatDuration(3900)).toBe('1 sa 5 dk')
+    expect(formatDuration(-5)).toBe('0 sn')
+  })
+})
+
+describe('sıralama satırında süre', () => {
+  it('visibleRows süreyi korur', () => {
+    const rows = [{ rank: 1, name: 'A', points2: 4, durationSeconds: 102, me: true }]
+    expect(visibleRows(rows, false)[0]!.durationSeconds).toBe(102)
   })
 })
 

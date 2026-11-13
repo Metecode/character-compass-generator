@@ -31,6 +31,7 @@ describe('sunucu limitleri ön yüzle aynı', () => {
     expect(server.RATE_LIMITS['get-game'].max).toBe(120)
     expect(server.RATE_LIMITS['use-hint'].max).toBe(120)
     expect(server.RATE_LIMITS['game-stats'].max).toBe(60)
+    expect(server.RATE_LIMITS['start-game'].max).toBe(120)
   })
 
   it('16 foto + 16 bulanık dosya + JSON gövde sınıra sığar', () => {

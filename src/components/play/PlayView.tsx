@@ -16,7 +16,7 @@ import {
   unplace,
   type Placement,
 } from '../../lib/play'
-import { GameApiError, requestHint, submitGuess, type OpenGame, type PlayedResult } from '../../lib/playApi'
+import { GameApiError, requestHint, startGame, submitGuess, type OpenGame, type PlayedResult } from '../../lib/playApi'
 import { NamePickerPanel, NamePickerSheet, type NamePickerProps } from './NamePicker'
 import { PlayBoard } from './PlayBoard'
 import { PlayCell } from './PlayCell'
@@ -59,6 +59,12 @@ export function PlayView({ code, game, playerName, initialHints, savedCells, onP
       scroller?.scrollBy({ top: r.bottom > visibleBottom ? r.bottom - visibleBottom : r.top - 8, behavior: 'smooth' })
     }
   }, [selected, sheetHeight, isDesktop])
+
+  // Oyuna başlandı: sunucu başlangıç zamanını bu cihaz için yalnızca ilk seferde
+  // yazar (yenileme sıfırlamaz). Başarısız olursa oyun yine oynanır; süre boş kalır.
+  useEffect(() => {
+    void startGame(code, deviceId()).catch(() => {})
+  }, [code])
 
   const placed = placedCount(placement, playable)
   const complete = placed === total

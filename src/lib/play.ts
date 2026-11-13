@@ -25,6 +25,20 @@ export function locative(n: number): string {
 export const formatPoints = (points2: number): string =>
   points2 % 2 === 0 ? String(points2 / 2) : `${Math.floor(points2 / 2)},5`
 
+/** Çözme süresi: "42 sn", "1 dk 42 sn", "2 dk", "1 sa 5 dk". */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds))
+  if (s < 60) return `${s} sn`
+  if (s < 3600) {
+    const m = Math.floor(s / 60)
+    const r = s % 60
+    return r ? `${m} dk ${r} sn` : `${m} dk`
+  }
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  return m ? `${h} sa ${m} dk` : `${h} sa`
+}
+
 /** "9'da 6" / "9'da 6,5" */
 export const scoreLabel = (points2: number, total: number): string =>
   `${total}${locative(total)} ${formatPoints(points2)}`
@@ -203,6 +217,7 @@ export interface RankingRow {
   rank: number
   name: string
   points2: number
+  durationSeconds?: number | null
   me?: boolean
 }
 

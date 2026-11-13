@@ -2,19 +2,21 @@ import { Compass as CompassIcon } from '@phosphor-icons/react'
 import { forwardRef, useRef } from 'react'
 import { CANVAS_SIZE, SITE_URL } from '../../constants'
 import { useAutoFitText } from '../../hooks/useAutoFitText'
-import { formatPoints, locative } from '../../lib/play'
+import { formatDuration, formatPoints, locative } from '../../lib/play'
 
 interface Props {
   title: string
   points2: number
   total: number
+  /** Çözme süresi (sn); bilinmiyorsa gösterilmez. */
+  durationSeconds?: number | null
 }
 
 /**
  * Paylaşılabilir skor kartı (1080×1080). Yalnızca oyun başlığı, skor, kısa bir
  * çağrı ve site adresi; başkalarının adı ya da fotoğrafı yer almaz.
  */
-export const ScoreCard = forwardRef<HTMLDivElement, Props>(function ScoreCard({ title, points2, total }, ref) {
+export const ScoreCard = forwardRef<HTMLDivElement, Props>(function ScoreCard({ title, points2, total, durationSeconds }, ref) {
   const titleRef = useRef<HTMLDivElement>(null)
   useAutoFitText(titleRef, 72, 36, [title])
 
@@ -48,7 +50,12 @@ export const ScoreCard = forwardRef<HTMLDivElement, Props>(function ScoreCard({ 
             {locative(total)} {formatPoints(points2)}
           </span>
         </p>
-        <p className="mt-2 inline-block self-start bg-accent px-4 text-[72px] leading-tight font-black">bildim!</p>
+        <p className="mt-2 flex items-center gap-6">
+          <span className="bg-accent px-4 text-[72px] leading-tight font-black">bildim!</span>
+          {durationSeconds != null && (
+            <span className="text-[56px] font-black text-muted">· {formatDuration(durationSeconds)}</span>
+          )}
+        </p>
       </div>
 
       <div className="mt-12 flex items-center justify-between gap-6">

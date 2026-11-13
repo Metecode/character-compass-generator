@@ -40,6 +40,8 @@ export interface RankingEntry {
   rank: number
   name: string
   points2: number
+  /** Çözme süresi (sn); bilinmiyorsa null. */
+  durationSeconds: number | null
   me: boolean
 }
 
@@ -48,6 +50,8 @@ export interface PlayedResult {
   gridSize: 2 | 3 | 4
   regions: Region[]
   playerName: string
+  /** Bu oyuncunun çözme süresi (sn); başlangıç kaydı yoksa null. */
+  durationSeconds: number | null
   score: { points2: number; total: number; cells: (CellResult | null)[] }
   cells: { name: string; bullets: string[]; photo: string | null }[]
   ranking: RankingEntry[]
@@ -82,6 +86,14 @@ export async function getGame(code: string, device: string): Promise<GameState> 
   return normalize(res)
 }
 
+/**
+ * Oyuna başlandı: sunucu bu cihaz için başlangıç zamanını kaydeder (yalnızca
+ * ilk seferde; tekrar çağrılması zararsızdır). Çözme süresi sunucuda hesaplanır.
+ */
+export async function startGame(code: string, device: string): Promise<void> {
+  await call('start-game', json({ code, device }), JSON_TYPE)
+}
+
 /** Bulanık fotoğrafı data URL olarak döner; ipucu sunucuda kaydedilir. */
 export async function requestHint(code: string, device: string, cell: number): Promise<string> {
   const res = (await call('use-hint', json({ code, device, cell }), JSON_TYPE)) as { image?: unknown }
@@ -110,7 +122,7 @@ export interface GameStats {
     easiest: string[]
     nobody: string[]
   }
-  ranking: { id: string; rank: number; name: string; points2: number }[]
+  ranking: { id: string; rank: number; name: string; points2: number; durationSeconds: number | null }[]
 }
 
 /** Kurucu istatistiği; `remove` verilirse o tahmin önce silinir. */

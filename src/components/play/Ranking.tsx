@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { formatPoints, visibleRows, type RankingRow } from '../../lib/play'
+import { formatDuration, formatPoints, visibleRows, type RankingRow } from '../../lib/play'
 
 interface Props<T extends RankingRow> {
   rows: readonly T[]
@@ -8,7 +8,7 @@ interface Props<T extends RankingRow> {
   action?: (row: T) => React.ReactNode
 }
 
-/** Sıralama: puan azalan, eşitlikte önce gönderen (sunucu sıralar). Cevap içermez. */
+/** Sıralama: puan azalan, eşitlikte süre artan, o da eşitse önce gönderen (sunucu sıralar). Cevap içermez. */
 export function Ranking<T extends RankingRow>({ rows, total, action }: Props<T>) {
   const [expanded, setExpanded] = useState(false)
   const shown = visibleRows(rows, expanded)
@@ -31,6 +31,12 @@ export function Ranking<T extends RankingRow>({ rows, total, action }: Props<T>)
                 {r.name}
                 {r.me && <span className="ml-1.5 text-xs font-bold text-muted">(sen)</span>}
               </span>
+              {r.durationSeconds != null && (
+                <span className="shrink-0 text-xs font-bold text-muted tabular-nums">
+                  <span className="sr-only">süre </span>
+                  {formatDuration(r.durationSeconds)}
+                </span>
+              )}
               <span className="shrink-0 font-black tabular-nums">
                 {formatPoints(r.points2)}
                 <span className="text-xs font-bold text-muted">/{total}</span>

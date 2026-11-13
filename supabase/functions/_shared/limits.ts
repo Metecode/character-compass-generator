@@ -52,5 +52,6 @@ export const RATE_LIMITS = {
   'use-hint': { max: 120, windowSeconds: 3600 },
   'submit-guess': { max: 30, windowSeconds: 3600 },
   'game-stats': { max: 60, windowSeconds: 3600 },
+  'start-game': { max: 120, windowSeconds: 3600 },
 } as const
 export type RateLimitedAction = keyof typeof RATE_LIMITS

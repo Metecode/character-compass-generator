@@ -48,7 +48,7 @@ export default function PrivacyPage() {
       <Section title="Oyunu oynayınca ne işleniyor?">
         <ul className="list-disc pl-5">
           <li>Oyuncunun yazdığı ad (sıralamada görünür)</li>
-          <li>Cevapları, açtığı ipuçları ve puanı</li>
+          <li>Cevapları, açtığı ipuçları, puanı ve oyuna başlama zamanı (çözme süresi için)</li>
           <li>
             Cihaz kimliğinin özeti: tarayıcı rastgele bir kimlik üretip bu cihazda saklar; sunucuda
             yalnızca oyuna bağlı özeti tutulur. Her cihazın bir kez oynaması bununla sağlanır.

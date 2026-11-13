@@ -222,6 +222,8 @@ export interface GuessRow {
   answers: (string | null)[]
   hints: number[]
   points2: number
+  /** Çözme süresi (sn); başlangıç kaydı yoksa null. */
+  duration_seconds: number | null
   created_at: string
 }
 
@@ -229,23 +231,48 @@ export interface RankingEntry {
   rank: number
   name: string
   points2: number
+  /** Çözme süresi (sn); bilinmiyorsa null. */
+  durationSeconds: number | null
   /** Bu satır isteği yapan cihaza mı ait. */
   me: boolean
 }
 
-/** Puan azalan, eşitlikte önce gönderen. Eşit puanlılar aynı sırayı paylaşır. */
+/**
+ * Sıralama düzeni: puan azalan; eşitlikte süre artan (süresi olmayan en sonda);
+ * o da eşitse önce gönderen.
+ */
+export function compareGuesses(
+  a: Pick<GuessRow, 'points2' | 'duration_seconds' | 'created_at'>,
+  b: Pick<GuessRow, 'points2' | 'duration_seconds' | 'created_at'>,
+): number {
+  if (a.points2 !== b.points2) return b.points2 - a.points2
+  const da = a.duration_seconds ?? Number.POSITIVE_INFINITY
+  const db = b.duration_seconds ?? Number.POSITIVE_INFINITY
+  if (da !== db) return da < db ? -1 : 1
+  return Date.parse(a.created_at) - Date.parse(b.created_at)
+}
+
+/** Sıralanmış satırlar; aynı puan ve aynı süredekiler aynı sırayı paylaşır. */
+export function sortGuesses<T extends Pick<GuessRow, 'points2' | 'duration_seconds' | 'created_at'>>(rows: readonly T[]): T[] {
+  return [...rows].sort(compareGuesses)
+}
+
 export function ranking(rows: readonly GuessRow[], myHash: string | null): RankingEntry[] {
-  const sorted = [...rows].sort(
-    (a, b) => b.points2 - a.points2 || Date.parse(a.created_at) - Date.parse(b.created_at),
-  )
   let rank = 0
-  let prev: number | null = null
-  return sorted.map((r, i) => {
-    if (r.points2 !== prev) {
+  let prev: string | null = null
+  return sortGuesses(rows).map((r, i) => {
+    const key = `${r.points2}|${r.duration_seconds ?? ''}`
+    if (key !== prev) {
       rank = i + 1
-      prev = r.points2
+      prev = key
     }
-    return { rank, name: r.player_name, points2: r.points2, me: myHash !== null && r.device_hash === myHash }
+    return {
+      rank,
+      name: r.player_name,
+      points2: r.points2,
+      durationSeconds: r.duration_seconds ?? null,
+      me: myHash !== null && r.device_hash === myHash,
+    }
   })
 }
 

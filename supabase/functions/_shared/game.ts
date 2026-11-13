@@ -96,9 +96,10 @@ export async function hintsOf(db: SupabaseClient, code: string, hash: string): P
 export async function guessesOf(db: SupabaseClient, code: string): Promise<GuessRow[]> {
   const { data, error } = await db
     .from('guesses')
-    .select('id, device_hash, player_name, answers, hints, points2, created_at')
+    .select('id, device_hash, player_name, answers, hints, points2, duration_seconds, created_at')
     .eq('game_code', code)
     .order('points2', { ascending: false })
+    .order('duration_seconds', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true })
   if (error) throw new Error('guess lookup failed')
   return (data ?? []) as GuessRow[]
@@ -139,6 +140,8 @@ export interface PlayedResult {
   regions: LiveGame['regions']
   playerName: string
   score: Score
+  /** Bu oyuncunun çözme süresi (sn); bilinmiyorsa null. */
+  durationSeconds: number | null
   /** Hücre başına: maddeler, gerçek isim (boş hücrede ''), net foto adresi. */
   cells: { name: string; bullets: string[]; photo: string | null }[]
   ranking: RankingEntry[]
@@ -159,6 +162,7 @@ export async function playedResult(
     gridSize: game.grid_size,
     regions: game.regions,
     playerName: guess.player_name,
+    durationSeconds: guess.duration_seconds ?? null,
     score: scoreGuess(game.cells, guess.answers, new Set(guess.hints)),
     cells: game.cells.map((c, i) => ({
       name: c.name.trim(),
@@ -173,7 +177,7 @@ export async function playedResult(
 export async function guessOf(db: SupabaseClient, code: string, hash: string): Promise<GuessRow | null> {
   const { data, error } = await db
     .from('guesses')
-    .select('id, device_hash, player_name, answers, hints, points2, created_at')
+    .select('id, device_hash, player_name, answers, hints, points2, duration_seconds, created_at')
     .eq('game_code', code)
     .eq('device_hash', hash)
     .maybeSingle()
