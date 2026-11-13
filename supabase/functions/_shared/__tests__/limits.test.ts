@@ -67,6 +67,22 @@ describe('sunucu limitleri ön yüzle aynı', () => {
     // İstemci en çok saniyede bir çeker (min aralık); oturum limiti bunun üstünde kalır.
     expect(server.ROOM_SESSION_LIMITS['room-state'].max).toBeGreaterThan(60_000 / client.ROOM_MIN_FETCH_GAP_MS)
     expect(server.ROOM_SESSION_LIMITS['room-state'].windowSeconds).toBe(60)
+    expect(server.ROOM_WRITE_GRACE_SECONDS).toBe(client.ROOM_WRITE_GRACE_SECONDS)
+  })
+
+  it('canlı oda: yazma aşaması', () => {
+    // Her oyuncu 3 madde yazar ve 3 madde alır.
+    for (const mode of server.ROOM_MODES) {
+      const a = server.ROOM_ASSIGNMENT[mode]
+      expect(a.targets * a.slots).toBe(3)
+      // Halkada hedefler farklı ve kimse kendine yazmaz.
+      expect(server.ROOM_MIN_PLAYERS[mode]).toBeGreaterThan(a.targets)
+    }
+    expect([1, 4, 5, 9, 10, 16].map(server.roomGridSize)).toEqual([2, 2, 3, 3, 4, 4])
+    // 5 dk yazma boyunca ≈ 2 sn'de bir taslak kaydı oturum limitine sığar.
+    expect(server.ROOM_SESSION_LIMITS['room-action'].max).toBeGreaterThan(300 / 2 + 16 * 2)
+    // Taslak debounce'u son kayıt payından kısa.
+    expect(client.ROOM_SAVE_DEBOUNCE_MS).toBeLessThan(server.ROOM_WRITE_GRACE_SECONDS * 1000)
   })
 
   it('canlı oda: oluşturma limiti, tavanlar ve süreler', () => {

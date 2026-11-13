@@ -2,13 +2,15 @@
  * POST /functions/v1/get-room-state  (JSON, apikey: publishable)
  * Gövde: { code, session? }
  *
- * - Oturumu geçerli oyuncuya kendi görünümü (projectMember): lobi listesi, ayarlar,
- *   kanal adı, sunucu saati. Yazarlık bilgisi hiçbir aşamada dönmez.
+ * - Oturumu geçerli oyuncuya kendi görünümü (projectMember): oyuncu listesi, ayarlar,
+ *   kanal adı, sunucu saati; YAZMA'da yalnızca kendi görevi ve kendi maddeleri.
+ *   Yazarlık bilgisi hiçbir aşamada başkasına dönmez.
  * - Oturumsuz (ya da oturumu artık geçersiz) ziyaretçiye yalnızca kurucu adı,
  *   oyuncu sayısı ve katılınabilirlik (projectOutsider). `sessionValid: false`
  *   istemciye cihazdaki anahtarı silmesini söyler (çıkarıldı ya da çıktı).
- * - Oyuncunun görüldüğü kaydedilir; admin 5 dakikadır görünmüyorsa devredilir
- *   (devir olursa kanala sinyal gider).
+ * - Oyuncunun görüldüğü kaydedilir; admin 5 dakikadır görünmüyorsa devredilir.
+ * - Yazma süresi (ve kayıt payı) dolduysa aşamayı bu istek ilerletir (cron yok).
+ *   Devir ya da aşama değişirse kanala sinyal gider.
  *
  * Oda yoksa ya da süresi dolmuşsa: 404 not_found.
  * Limit: oturum başına dakikada 90; oturumsuz IP başına saatte 240.
@@ -16,8 +18,9 @@
 
 import { readJson } from '../_shared/game.ts'
 import { errorJson, json } from '../_shared/http.ts'
-import { channelTopic, projectMember, projectOutsider } from '../_shared/room.ts'
-import { loadLiveRoom, playerBySession, playersOf, touchAndHandover } from '../_shared/roomDb.ts'
+import { ROOM_WRITE_GRACE_SECONDS } from '../_shared/limits.ts'
+import { channelTopic, projectMember, projectOutsider, writingExpired } from '../_shared/room.ts'
+import { loadLiveRoom, myItemsOf, playerBySession, playersOf, touchAndHandover } from '../_shared/roomDb.ts'
 import {
   adminClient,
   checkRateLimit,
@@ -34,7 +37,7 @@ serve('get-room-state', ['POST'], async (req, origin) => {
   const { code, session } = parsed.body
 
   const db = adminClient()
-  const room = await loadLiveRoom(db, code)
+  let room = await loadLiveRoom(db, code)
   const me = room && session !== undefined ? await playerBySession(db, room.code, session) : null
 
   if (me) {
@@ -46,17 +49,28 @@ serve('get-room-state', ['POST'], async (req, origin) => {
   }
   if (!room) return errorJson('not_found', 404, origin)
 
-  const players = await playersOf(db, room.code)
+  let players = await playersOf(db, room.code)
   if (!me) {
     return json({ ...projectOutsider(room, players.length), sessionValid: session === undefined }, 200, origin)
   }
 
   const now = Date.now()
-  if (await touchAndHandover(db, room, players, me.id, now)) {
-    const fresh = await loadLiveRoom(db, room.code)
-    if (!fresh) return errorJson('not_found', 404, origin)
-    await signalRoom(channelTopic(fresh.channel_id))
-    return json(projectMember(fresh, await playersOf(db, room.code), me.id, now), 200, origin)
+  let changed = await touchAndHandover(db, room, players, me.id, now)
+  if (writingExpired(room, now, ROOM_WRITE_GRACE_SECONDS)) {
+    const { data, error } = await db.rpc('room_finish_writing', {
+      p_code: room.code,
+      p_grace_seconds: ROOM_WRITE_GRACE_SECONDS,
+    })
+    if (error) throw new Error('finish writing failed')
+    if (data === true) changed = true
   }
-  return json(projectMember(room, players, me.id, now), 200, origin)
+  if (changed) {
+    room = await loadLiveRoom(db, room.code)
+    if (!room) return errorJson('not_found', 404, origin)
+    players = await playersOf(db, room.code)
+    await signalRoom(channelTopic(room.channel_id))
+  }
+
+  const myItems = room.phase === 'writing' ? await myItemsOf(db, room.code, me.id) : []
+  return json(projectMember(room, players, me.id, now, myItems), 200, origin)
 })

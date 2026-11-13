@@ -32,8 +32,8 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 | `create-room` | Tarayıcı ("Canlı oda kur") | publishable | IP başına saatte 10 ve günde 30; sistemde en fazla 20 aktif oda |
 | `join-room` | Tarayıcı (`/r/{code}`) | publishable | IP başına saatte 60; bitmemiş odalarda toplam 180 oyuncu |
 | `get-room-state` | Tarayıcı (`/r/{code}`) | publishable + `session` (yoksa ziyaretçi görünümü) | oturum başına dakikada 90; oturumsuz IP başına saatte 240 |
-| `room-action` | Tarayıcı | publishable + `session`; `action` beyaz listede | oturum başına saatte 300 |
-| `room-admin` | Tarayıcı (admin) | publishable + `session` = `rooms.admin_player_id`; `action` beyaz listede | oturum başına saatte 300 |
+| `room-action` | Tarayıcı | publishable + `session`; `action` beyaz listede (`leave`, `save-items`) | oturum başına saatte 600 |
+| `room-admin` | Tarayıcı (admin) | publishable + `session` = `rooms.admin_player_id`; `action` beyaz listede (`kick`, `delete`, `start`, `end-writing`) | oturum başına saatte 300 |
 | `cleanup` | Yalnızca pg_cron (15 dk) | `x-cleanup-secret` (Vault'taki sır, DB'de doğrulanır) | — |
 | `health` | GitHub Actions | yok; veri döndürmez (204) | — |
 
@@ -86,6 +86,27 @@ bir Edge Function'dır.
   saklanır (her istekte yeniden imzalanmaz, tarayıcı önbelleği çalışır). Lobiden çıkan ya da
   çıkarılan oyuncunun dosyası hemen silinir.
 - **Ad:** oda içinde tekil, `toLocaleLowerCase('tr')` ile (`name_key`); 409 `name_taken`.
+- **Başlatma (B):** `room-admin` → `start` (`room_start`, oda kilitli): yalnızca admin, LOBI'de,
+  oyuncu sayısı mod alt sınırında (409 `too_few` + `needed`). Oyuncular rastgele halkaya dizilir
+  (`ring_pos`); Klasik'te herkes sonraki 3 kişiye 1'er, Hızlı'da sonraki 1 kişiye 3 madde yazar
+  (`ROOM_ASSIGNMENT`, `_shared/limits.ts`); boş `room_items` satırları burada açılır, ızgara
+  boyutu (2/3/4) yazılır, `writing_ends_at = now() + write_seconds`. Başladıktan sonra katılma,
+  çıkarma ve çıkma yok.
+- **Yazma (B):** `room-action` → `save-items` `{ items: [{ target, slot, text }], ready? }`
+  (`room_save_items`). Yalnızca oyuncuya atanmış satırlar yazılır (400 `not_assigned`); metin
+  ≤ 40 karakter, boşluklar sadeleşir. Taslak kaydı sinyal göndermez (istemci ~1,5 sn duraklamada,
+  odak kaybında, sayfa gizlenince ve süre sonunda gönderir). `ready` değişirse sinyal gider;
+  herkes hazırsa aşama hemen AÇILIŞ'a geçer. Süre bittikten sonra 5 sn (`ROOM_WRITE_GRACE_SECONDS`)
+  daha metin kabul edilir, hazır durumu değişmez. Argo kapalı odada `_shared/profanity.ts`
+  süzgecine takılan madde boş kaydedilir ve yanıtta `flagged` olarak döner.
+- **Yazmanın bitişi (B):** cron yok. Süre ve kayıt payı dolduysa ilk `get-room-state` isteği
+  `room_finish_writing` ile aşamayı ilerletir ve sinyal gönderir; istemciler bitiş + pay + 0,3–1,8 sn
+  sonra sorar, ilerlemezse 3 sn'de bir yeniden. Admin `end-writing` ile erken bitirince aşama hemen
+  ilerlemez: `writing_ends_at` şimdiye çekilir, istemciler son taslaklarını pay içinde gönderir.
+  Aşama geçişi `room_enter_reveal`'da (C açılış sırasını burada kuracak).
+- **Yazma görünümü (B):** `writing` = bitiş anı (sunucu saati, ms), hazır sayısı / toplam, kendi
+  hazır durumu ve kendi görevi (hedef kimlikleri + yalnızca kendi yazdığı metinler). Halka, kimin
+  hazır olduğu ve başkalarının maddeleri dönmez.
 - **Silme:** oda kuruluştan en geç 2 saat sonra (`expires_at`, tablo kısıtıyla), oyun bitince
   30 dakika sonra (Parça C). `cleanup` süresi dolan odaları dosyalarıyla siler ve `room-photos`'taki
   yetim klasörleri temizler. Admin `room-admin` → `delete` ile hemen siler.
@@ -118,6 +139,8 @@ tam oyun (5 dk lobi, 3 dk yazma, 16 hücre açılış ~15 dk):
 | Toplam | | **~2.000–2.500** |
 
 Ayda ~200 tam dolu oyun (tahmin oyunu kullanımı hariç). Nabız payı küçük (~%15); aralık 60 sn kaldı.
+B ölçümü (`pnpm room:e2e:write`, 4 oyuncu, 2 dk yazma, lobi ve geçiş dahil): toplam 46 durum isteği
+ve 8 `room-action`; taslak kaydı oyuncu başına 2–3 istekte kaldı. Tablodaki yazma tahmini korunur.
 
 ### Fonksiyon ortam değişkenleri
 
@@ -143,7 +166,7 @@ Elle verilecekler (`npx supabase secrets set …`):
 2. **Dashboard kontrolü** (kullanıcı, 1 dk): Settings → API Keys'te bir publishable ve bir
    secret anahtar olduğunu, Integrations → Data API'de "Automatically expose new tables"ın
    kapalı olduğunu gör.
-3. **Migration'lar**: `npx supabase db push --remote` → iki migration uygulanır.
+3. **Migration'lar**: `npx supabase db push --remote` → bekleyen migration'lar uygulanır.
    (CLI v3'te `db push` ve `db query` varsayılan olarak yerel yığını hedefler; `--remote`
    verilmezse 127.0.0.1:54322'ye bağlanmaya çalışıp hata verir. Ajan modunda canlıyı
    değiştiren komutlar ayrıca `--yes` ister; salt okuma sorguları `--read-only` ile çalışır.)
@@ -151,7 +174,8 @@ Elle verilecekler (`npx supabase secrets set …`):
    ```sh
    npx supabase secrets set RATE_LIMIT_SALT="$(openssl rand -hex 32)"
    ```
-5. **Fonksiyonlar**: `npx supabase functions deploy create-game delete-game cleanup health`
+5. **Fonksiyonlar**: `npx supabase functions deploy` (hepsi; `_shared/` değişince ona bağlı tüm
+   fonksiyonlar yeniden yayınlanmalı, ajan modunda `--yes`)
 6. **IP başlığı doğrulaması** (aşağıda) → gerekirse `CLIENT_IP_HEADER` ayarla.
 7. **Ön yüz**: `.env.local` (gitignore'da) ve Netlify ortam değişkenleri:
    ```
@@ -301,6 +325,20 @@ Betikler `.env.local`'daki publishable anahtarla canlı fonksiyonları çağır�
   oyuncu aynı yerine döner; admin siler, diğerleri "Bu oda artık yok" görür. `SHOTS=klasör`
   ekran görüntüsü alır.
 - **Çağrı ölçümü** (`MINUTES=3 node scripts/room-load.mjs`): 16 oyunculu lobi, yukarıdaki tablo.
+- **Yazma API'si (B)** (`pnpm room:check:write`, `scripts/room-writing-check.mjs`): 3 kişiyle Klasik
+  başlamaz (409 `too_few`, `needed: 1`); admin olmayan başlatamaz; başladıktan sonra katılma,
+  çıkarma, çıkma 409; herkesin 3 farklı hedefi var, herkes 3 madde alır; yanıtlarda halka, yazar,
+  oturum yok; taslak sinyalsiz, hazır olma sinyalli; hedef dahil kimse başkasının maddesini görmez;
+  argo kapalı odada takılan madde boş + `flagged`; atanmamış hedef / yuva 400; 41 karakter 400;
+  admin erken bitirince pay içinde kayıt kabul, paydan sonra ilk istek aşamayı ilerletir; Hızlı
+  odada son kişi hazır olunca hemen ilerler; dinleyici yalnızca boş sinyal alır.
+- **Yazma, çok sekmeli (B)** (`pnpm dev` + `pnpm room:e2e:write`, ~3 dk): admin masaüstünde 2 dk
+  Klasik oda kurar, 3 oyuncu 390 px'te katılır; başlatınca herkes geri sayımı, büyük hedef
+  fotoğrafını ve "1/3"ü görür; taslak debounce ile kaydedilir, zar havuzdan madde getirir, noktalar
+  dolu/boş gösterir; çevrim dışı yazan oyuncu "Kaydedilemedi" görür, bağlantı dönünce kaydedilir,
+  yenileyince yazdıkları gelir; boş maddeyle "Hazırım" onay sorar, admin "1/4 hazır" görür,
+  düzenlemeye dönülür; son 30 sn'de sayaç kırmızı; admin son 2 sn'de yazar; süre dolunca kimse
+  basmadan herkes açılışa geçer; sunucuda 12 satırdan 5'i dolu (son saniye maddesi dahil).
 - **Admin devri:** SQL Editor'de adminin `last_seen_at`'ı 6 dk geri çekilir; başka bir oyuncunun
   ilk durum isteğinde en eski çevrimiçi oyuncu admin olur, eski admin dönünce normal oyuncudur.
 - **Süre dolunca silme:**

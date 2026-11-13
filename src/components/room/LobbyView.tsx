@@ -1,4 +1,4 @@
-import { CircleNotch, Crown, SignOut, Trash, UserMinus } from '@phosphor-icons/react'
+import { CircleNotch, Crown, Play, SignOut, Trash, UserMinus } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { roomAction, roomAdmin, roomErrorMessage, type MemberView, type RoomPlayer, type RoomSession } from '../../lib/roomApi'
 import { useUiStore } from '../../store/uiStore'
@@ -24,6 +24,7 @@ export function LobbyView({
 }) {
   const [confirm, setConfirm] = useState<Confirm | null>(null)
   const [busy, setBusy] = useState(false)
+  const [starting, setStarting] = useState(false)
   const showToast = useUiStore((s) => s.showToast)
   const isAdmin = data.me.isAdmin
   const count = data.players.length
@@ -55,6 +56,20 @@ export function LobbyView({
     }
   }
 
+  const start = async () => {
+    if (starting) return
+    setStarting(true)
+    try {
+      await roomAdmin(session, { action: 'start' })
+      onChanged()
+    } catch (e) {
+      showToast(roomErrorMessage(e, 'Oyun başlatılamadı. Tekrar dener misin?'), 'error')
+      onChanged()
+    } finally {
+      setStarting(false)
+    }
+  }
+
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-4">
       <div className="rounded-2xl border-[3px] border-ink bg-surface p-4 shadow-brutal-lg">
@@ -72,6 +87,27 @@ export function LobbyView({
         <p className="mt-3 text-sm font-bold text-muted">
           {MODE_LABELS[mode].title} · {writeTimeLabel(writeSeconds)} yazma · {allowProfanity ? 'argo serbest' : 'argo süzgeci açık'}
         </p>
+        {isAdmin && (
+          <button
+            type="button"
+            className="btn btn-primary mt-4 w-full text-base"
+            onClick={start}
+            disabled={missing > 0 || starting}
+            aria-describedby={missing === 0 ? 'start-hint' : undefined}
+          >
+            {starting ? (
+              <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
+            ) : (
+              <Play size={20} weight="fill" aria-hidden />
+            )}
+            Oyunu başlat
+          </button>
+        )}
+        {isAdmin && missing === 0 && (
+          <p id="start-hint" className="mt-2 text-center text-sm text-muted">
+            Başlatınca yeni kimse katılamaz ve kimse çıkarılamaz.
+          </p>
+        )}
       </div>
 
       <InviteCard code={session.code} creatorName={data.creatorName} primary={isAdmin} />

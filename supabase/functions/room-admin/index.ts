@@ -6,12 +6,17 @@
  * `action` beyaz listeyle doğrulanır (ROOM_ADMIN_ACTIONS):
  *   kick   { playerId } — yalnızca LOBI'de; admin kendini çıkaramaz.
  *   delete              — odayı fotoğraflarıyla birlikte hemen siler.
+ *   start               — LOBI → YAZMA. Oyuncu sayısı mod alt sınırını sağlamalı
+ *                         (409 too_few + needed). Halka ve boş madde satırları kurulur.
+ *   end-writing         — yazmayı erken bitirir: bitiş anı şimdiye çekilir, kayıt
+ *                         payından sonraki ilk durum isteği aşamayı ilerletir.
  *
  * Limit: oturum başına saatte 300.
  */
 
 import { readJson } from '../_shared/game.ts'
 import { errorJson, json } from '../_shared/http.ts'
+import { ROOM_ASSIGNMENT, ROOM_MAX_PLAYERS, ROOM_MIN_PLAYERS } from '../_shared/limits.ts'
 import { ROOM_ADMIN_ACTIONS, channelTopic, isUuid, parseAction } from '../_shared/room.ts'
 import { loadLiveRoom, playerBySession, removeRoomPhoto } from '../_shared/roomDb.ts'
 import {
@@ -63,6 +68,37 @@ serve('room-admin', ['POST'], async (req, origin) => {
     case 'delete': {
       await deleteRoomCompletely(db, room.code)
       // Silindikten sonra: sinyali alan istemciler 404 görür ve "Oda kapandı" gösterir.
+      await signalRoom(topic)
+      return json({ ok: true }, 200, origin)
+    }
+    case 'start': {
+      const { targets, slots } = ROOM_ASSIGNMENT[room.mode]
+      const { data, error } = await db.rpc('room_start', {
+        p_code: room.code,
+        p_admin: me.id,
+        p_min_players: ROOM_MIN_PLAYERS[room.mode],
+        p_max_players: ROOM_MAX_PLAYERS,
+        p_targets: targets,
+        p_slots: slots,
+      })
+      if (error) throw new Error('start failed')
+      const r = data as { ok: boolean; error?: string; needed?: number }
+      if (!r.ok) {
+        if (r.error === 'too_few') return json({ error: 'too_few', needed: r.needed }, 409, origin)
+        const status = r.error === 'not_admin' ? 403 : r.error === 'not_found' ? 404 : 409
+        return errorJson(r.error ?? 'internal', status, origin)
+      }
+      await signalRoom(topic)
+      return json({ ok: true }, 200, origin)
+    }
+    case 'end-writing': {
+      const { data, error } = await db.rpc('room_end_writing', { p_code: room.code, p_admin: me.id })
+      if (error) throw new Error('end writing failed')
+      const r = data as { ok: boolean; error?: string }
+      if (!r.ok) {
+        const status = r.error === 'not_admin' ? 403 : r.error === 'not_found' ? 404 : 409
+        return errorJson(r.error ?? 'internal', status, origin)
+      }
       await signalRoom(topic)
       return json({ ok: true }, 200, origin)
     }

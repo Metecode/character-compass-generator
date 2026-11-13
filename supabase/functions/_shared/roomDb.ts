@@ -7,11 +7,13 @@ import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0'
 import { bodyErrorResponse, errorJson, readBodyLimited } from './http.ts'
 import { ROOM_ADMIN_TIMEOUT_SECONDS, ROOM_MAX_BODY_BYTES, ROOM_ONLINE_SECONDS, ROOM_SEEN_WRITE_SECONDS } from './limits.ts'
 import {
+  ITEM_COLUMNS,
   PLAYER_COLUMNS,
   ROOM_COLUMNS,
   adminLooksAway,
   isRoomCode,
   isSessionToken,
+  type ItemRow,
   type PlayerRow,
   type RoomRow,
 } from './room.ts'
@@ -36,6 +38,17 @@ export async function playersOf(db: SupabaseClient, code: string): Promise<Playe
   const { data, error } = await db.from('room_players').select(PLAYER_COLUMNS).eq('room_code', code).order('seq')
   if (error) throw new Error('player lookup failed')
   return (data ?? []) as PlayerRow[]
+}
+
+/** Bu oyuncunun yazdığı maddeler (yalnızca kendi görünümü için). */
+export async function myItemsOf(db: SupabaseClient, code: string, authorId: string): Promise<ItemRow[]> {
+  const { data, error } = await db
+    .from('room_items')
+    .select(ITEM_COLUMNS)
+    .eq('room_code', code)
+    .eq('author_id', authorId)
+  if (error) throw new Error('item lookup failed')
+  return (data ?? []) as ItemRow[]
 }
 
 export async function playerCountOf(db: SupabaseClient, code: string): Promise<number> {

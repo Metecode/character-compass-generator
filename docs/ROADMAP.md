@@ -107,7 +107,10 @@ Kurallar:
 > `feature/live-room` dalında üç parça halinde. **Parça A (13 Kasım 2026):** şema, oda kurma/katılma,
 > lobi, canlı sinyal (public Broadcast + gizli `channel_id`), 5 sn yoklamaya düşme, yeniden bağlanma,
 > admin devri; sunucu canlıda, ön yüz dalda. Ayrıntı ve doğrulama: `docs/supabase.md` → "Canlı oda".
-> Sıradaki: B (atama ve yazma), C (açılış, skor, sonuç, silme).
+> **Parça B (13 Kasım 2026):** başlatma (mod alt sınırı sunucuda), rastgele halka ataması, yazma
+> ekranı (büyük hedef, Klasik'te "1/3"), sinyalsiz taslak kaydı, hazır/düzenlemeye dönme, sunucu
+> saatine göre geri sayım, admin erken bitirme, argo süzgeci, cron'suz aşama geçişi; sunucu canlıda.
+> Sıradaki: C (açılış, skor, sonuç, silme).
 > **Geçici gizli giriş:** "Canlı oda kur" menüde yalnızca cihazda bayrak varsa görünür
 > (`/?oda=1` yazar, `/?oda=0` siler; `src/lib/roomFlag.ts`). `/r/{kod}` bayraksız çalışır.
 > C bitince bayrak ve `roomFlag.ts` kaldırılacak.

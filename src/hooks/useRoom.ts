@@ -4,6 +4,7 @@ import {
   ROOM_MIN_FETCH_GAP_MS,
   ROOM_POLL_MS,
   ROOM_SIGNAL_JITTER_MS,
+  ROOM_WRITE_GRACE_SECONDS,
 } from '../constants'
 import { GameApiError, getRoomState, type MemberView, type OutsiderView, type RoomSession } from '../lib/roomApi'
 import { openRoomChannel } from '../lib/roomRealtime'
@@ -16,7 +17,8 @@ export type RoomScreen =
   | { kind: 'error'; code: string }
   /** `removed`: bu cihazın oturumu vardı ama artık geçersiz (çıkarıldı ya da çıktı). */
   | { kind: 'outsider'; data: OutsiderView; removed: boolean }
-  | { kind: 'member'; data: MemberView; session: RoomSession }
+  /** `clockOffset`: sunucu saati − cihaz saati (ms); geri sayım bununla düzeltilir. */
+  | { kind: 'member'; data: MemberView; session: RoomSession; clockOffset: number }
 
 export interface UseRoom {
   screen: RoomScreen
@@ -32,6 +34,10 @@ export interface UseRoom {
 
 /** Bağlantı göstergesi kısa kopmalarda yanıp sönmesin. */
 const RECONNECT_BADGE_DELAY_MS = 2_000
+/** Süre + kayıt payı dolunca durum isteği; herkes aynı anda istemesin diye bu kadar dağıtılır. */
+const DEADLINE_SPREAD_MS = 1_500
+/** Süre dolduğu halde aşama ilerlemediyse (saat kayması) bu aralıkla yeniden sorulur. */
+const DEADLINE_RETRY_MS = 3_000
 
 /**
  * /r/{code} sayfasının durumu: sunucudan çekme, Realtime sinyali, nabız,
@@ -69,10 +75,11 @@ export function useRoom(code: string): UseRoom {
         if (state.view === 'member' && session) {
           isAdminRef.current = state.me.isAdmin
           setTopic(state.channel)
+          const clockOffset = state.serverNow - Date.now()
           setScreen((prev) =>
             prev.kind === 'member' && prev.data.version === state.version && samePlayers(prev.data, state)
               ? prev
-              : { kind: 'member', data: state, session },
+              : { kind: 'member', data: state, session, clockOffset },
           )
         } else if (state.view === 'outsider') {
           if (session && !state.sessionValid) {
@@ -174,6 +181,24 @@ export function useRoom(code: string): UseRoom {
     }
   }, [problem])
   const showBadge = problem && badgeDelayPassed
+
+  // YAZMA: süre ve kayıt payı dolunca aşamayı ilerletmesi için sunucuya sor (cron yok;
+  // ilk istek ilerletir, diğerleri sinyalle öğrenir). İlerlemezse kısa aralıkla yeniden.
+  const endsAt = screen.kind === 'member' ? screen.data.writing?.endsAt : undefined
+  const clockOffset = screen.kind === 'member' ? screen.clockOffset : 0
+  useEffect(() => {
+    if (endsAt === undefined) return
+    let retry: ReturnType<typeof setInterval> | undefined
+    const wait = endsAt - (Date.now() + clockOffset) + ROOM_WRITE_GRACE_SECONDS * 1000 + 300 + Math.random() * DEADLINE_SPREAD_MS
+    const t = setTimeout(() => {
+      syncRef.current?.refresh()
+      retry = setInterval(() => syncRef.current?.refresh(), DEADLINE_RETRY_MS)
+    }, Math.max(0, wait))
+    return () => {
+      clearTimeout(t)
+      clearInterval(retry)
+    }
+  }, [endsAt, clockOffset])
 
   const refresh = useCallback(() => syncRef.current?.refresh(), [])
   const adopt = useCallback(

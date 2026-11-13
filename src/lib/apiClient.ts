@@ -22,13 +22,19 @@ export function config(): { url: string; key: string } {
   return { url: url.replace(/\/+$/, ''), key }
 }
 
-export async function call(path: string, body: BodyInit, contentType?: string): Promise<unknown> {
+/** `keepalive`: sayfa kapanırken de gitsin (küçük gövdeler; ör. son taslak). */
+export async function call(
+  path: string,
+  body: BodyInit,
+  contentType?: string,
+  { keepalive = false }: { keepalive?: boolean } = {},
+): Promise<unknown> {
   const { url, key } = config()
   const headers: Record<string, string> = { apikey: key }
   if (contentType) headers['Content-Type'] = contentType
   let res: Response
   try {
-    res = await fetch(`${url}/functions/v1/${path}`, { method: 'POST', headers, body })
+    res = await fetch(`${url}/functions/v1/${path}`, { method: 'POST', headers, body, keepalive })
   } catch {
     throw new GameApiError('network')
   }

@@ -128,7 +128,22 @@ export type RoomIpAction = keyof typeof ROOM_IP_LIMITS
  */
 export const ROOM_SESSION_LIMITS = {
   'room-state': { max: 90, windowSeconds: 60 },
-  'room-action': { max: 300, windowSeconds: 3600 },
+  // Taslak kaydı (≈1,5 sn debounce + odak kaybı) 5 dakikalık yazmada 150'ye yaklaşabilir; tahminler de buradan.
+  'room-action': { max: 600, windowSeconds: 3600 },
   'room-admin': { max: 300, windowSeconds: 3600 },
 } as const
 export type RoomSessionAction = keyof typeof ROOM_SESSION_LIMITS
+
+/**
+ * Yazma aşaması: Klasik'te herkes sonraki 3 kişiye 1'er madde, Hızlı'da sonraki
+ * 1 kişiye 3 madde yazar. Her oyuncu toplam 3 madde alır.
+ */
+export const ROOM_ASSIGNMENT: Record<RoomMode, { targets: number; slots: number }> = {
+  classic: { targets: 3, slots: 1 },
+  quick: { targets: 1, slots: 3 },
+}
+/** Süre bittikten sonra taslak kaydı için pay (son kayıt ve saat kayması). */
+export const ROOM_WRITE_GRACE_SECONDS = 5
+
+/** Oyuncu sayısına göre ızgara: 4'e kadar 2×2, 9'a kadar 3×3, üstü 4×4. */
+export const roomGridSize = (players: number): 2 | 3 | 4 => (players <= 4 ? 2 : players <= 9 ? 3 : 4)

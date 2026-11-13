@@ -67,7 +67,10 @@ export default function PrivacyPage() {
         <ul className="list-disc pl-5">
           <li>Odayı kuranın ve katılanların yazdığı ad ile kendi yüklediği fotoğraf (400×400 JPEG)</li>
           <li>Oda ayarları (mod, yazma süresi, küfür-argo izni) ve oyunun hangi aşamada olduğu</li>
-          <li>Oyuncuların yazdığı maddeler, “bu kim” tahminleri ve puanlar</li>
+          <li>
+            Oyuncuların yazdığı maddeler (yazarken taslak olarak da kaydedilir; argo kapalı odada
+            otomatik bir süzgeçten geçer), “bu kim” tahminleri ve puanlar
+          </li>
           <li>
             Oturum anahtarının özeti: odaya girince tarayıcına rastgele bir anahtar verilir ve bu
             cihazda saklanır; sunucuda yalnızca özeti tutulur. Sayfa yenilense de aynı yerine bununla dönersin.

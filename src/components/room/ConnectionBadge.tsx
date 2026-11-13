@@ -1,9 +1,15 @@
 import { CircleNotch } from '@phosphor-icons/react'
 
-/** Soket kopukken ekranın üstünde küçük gösterge; oyun yoklamayla sürer. */
+/**
+ * Soket kopukken ekranın altında küçük gösterge; oyun yoklamayla sürer.
+ * Altta durur: üstteki yapışkan geri sayımı kapatmasın.
+ */
 export function ConnectionBadge({ visible }: { visible: boolean }) {
   return (
-    <div aria-live="polite" className="pointer-events-none fixed inset-x-0 top-[72px] z-40 flex justify-center px-4">
+    <div
+      aria-live="polite"
+      className="pointer-events-none fixed inset-x-0 bottom-[max(16px,env(safe-area-inset-bottom))] z-40 flex justify-center px-4"
+    >
       {visible && (
         <p
           role="status"

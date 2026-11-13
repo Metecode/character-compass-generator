@@ -35,6 +35,9 @@ pnpm + Node 22.20.0 (`.nvmrc`).
   Realtime kanalı yalnızca boş sinyal taşır, istemci sinyalde durumu yeniden çeker
   (`src/lib/roomSync.ts`, `src/hooks/useRoom.ts`); `@supabase/realtime-js` yalnızca oda parçasında.
   Oturum anahtarı `compass-rooms`'ta (`src/store/roomsStore.ts`).
+  Aşama geçişleri SQL fonksiyonlarında, oda satırı kilitlenerek (`supabase/migrations/*live_rooms*`);
+  süre dolunca aşamayı cron değil ilk `get-room-state` isteği ilerletir. Taslak kaydı sinyalsizdir
+  (`src/lib/draftSaver.ts`). "Canlı oda kur" geçici olarak `/?oda=1` bayrağının arkasında (`src/lib/roomFlag.ts`).
 - `/g/*` linkleri `g.html` girişinden açılır (aynı `src/main.tsx`, yalnızca og/twitter etiketleri
   farklı; `public/_redirects`'te genel kuraldan önce). Önizleme görseli `public/og-game.png`,
   kaynağı `scripts/og-game.html` → `pnpm og:game`. `/r/*` aynı şekilde: `r.html`, `public/og-room.png` (`pnpm og:room`). `index.html`'in etiketleri ana sayfanındır.

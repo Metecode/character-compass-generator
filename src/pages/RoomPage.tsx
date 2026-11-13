@@ -4,6 +4,7 @@ import { ClosedCard } from '../components/room/ClosedCard'
 import { ConnectionBadge } from '../components/room/ConnectionBadge'
 import { JoinView } from '../components/room/JoinView'
 import { LobbyView } from '../components/room/LobbyView'
+import { WritingView } from '../components/room/WritingView'
 import { ToastHost } from '../components/ToastHost'
 import { useRoom } from '../hooks/useRoom'
 import { roomErrorMessage, GameApiError } from '../lib/roomApi'
@@ -74,13 +75,27 @@ function Room({ code }: { code: string }) {
         }}
       />
     )
+  } else if (screen.data.phase === 'writing' && screen.data.writing) {
+    body = (
+      <WritingView
+        key={`${screen.session.code}:${screen.session.playerId}`}
+        data={screen.data}
+        session={screen.session}
+        clockOffset={screen.clockOffset}
+        onChanged={room.refresh}
+        onDeleted={() => {
+          room.forget()
+          setDeleted(true)
+        }}
+      />
+    )
   } else {
-    // Yazma, açılış ve sonuç ekranları sonraki parçalarda (B, C).
+    // Açılış ve sonuç ekranları C parçasında.
     body = (
       <div className="mx-auto max-w-md rounded-2xl border-[3px] border-ink bg-surface p-6 shadow-brutal-lg" role="status">
         <HourglassHigh size={30} weight="bold" aria-hidden />
-        <h1 className="mt-3 text-2xl font-black tracking-tight">Oyun başladı</h1>
-        <p className="mt-2">Bu ekran yakında hazır olacak.</p>
+        <h1 className="mt-3 text-2xl font-black tracking-tight">Maddeler yazıldı</h1>
+        <p className="mt-2">Açılış ekranı yakında hazır olacak.</p>
       </div>
     )
   }

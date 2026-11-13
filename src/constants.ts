@@ -100,3 +100,9 @@ export const ROOM_POLL_MS = 5_000
 export const ROOM_SIGNAL_JITTER_MS = 300
 /** İki durum isteği arasında en az bu kadar süre. */
 export const ROOM_MIN_FETCH_GAP_MS = 1_000
+/** Süre bittikten sonra sunucunun taslak kabul ettiği pay (saniye); aşama bundan sonra ilerler. */
+export const ROOM_WRITE_GRACE_SECONDS = 5
+/** Yazarken taslak bu kadar duraklamadan sonra kaydedilir. */
+export const ROOM_SAVE_DEBOUNCE_MS = 1_500
+/** Geri sayım son bu kadar saniyede belirginleşir. */
+export const ROOM_COUNTDOWN_URGENT_SECONDS = 30

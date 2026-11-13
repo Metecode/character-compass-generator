@@ -18,6 +18,8 @@
     "og:game": "node scripts/og-game.mjs",
     "og:room": "node scripts/og-game.mjs room",
     "room:check": "node scripts/room-api-check.mjs",
+    "room:check:write": "node scripts/room-writing-check.mjs",
+    "room:e2e:write": "node scripts/room-writing-e2e.mjs",
     "room:e2e": "node scripts/room-e2e.mjs"
   },
   "dependencies": {

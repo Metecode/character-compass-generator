@@ -72,7 +72,16 @@ for (const t of ['rooms', 'room_players', 'room_items', 'room_guesses']) {
   const text = await res.text()
   check(res.status >= 400 && !text.includes('session_hash'), `tablo ${t} kapalı`, String(res.status))
 }
-for (const fn of ['room_join', 'room_remove_player', 'room_handover_admin']) {
+for (const fn of [
+  'room_join',
+  'room_remove_player',
+  'room_handover_admin',
+  'room_start',
+  'room_save_items',
+  'room_end_writing',
+  'room_finish_writing',
+  'room_enter_reveal',
+]) {
   const res = await fetch(`${URL_}/rest/v1/rpc/${fn}`, {
     method: 'POST',
     headers: { apikey: PK, 'Content-Type': 'application/json' },

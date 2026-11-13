@@ -58,6 +58,32 @@ export interface MemberView {
   creatorName: string
   expiresAt: string
   players: RoomPlayer[]
+  /** Yalnızca YAZMA aşamasında. */
+  writing?: WritingState
+}
+
+/** YAZMA aşamasında bu oyuncunun görevi (yalnızca kendi maddeleri; kimin hazır olduğu yok). */
+export interface WritingState {
+  /** Sürenin bittiği an (sunucu saati, ms). */
+  endsAt: number
+  readyCount: number
+  total: number
+  meReady: boolean
+  /** Halka sırasıyla hedefler; hedef bilgisi `players` listesinden. */
+  assignments: { targetId: string; texts: string[] }[]
+}
+
+export interface ItemDraft {
+  target: string
+  slot: number
+  text: string
+}
+
+export interface SaveItemsResult {
+  /** Argo süzgecine takıldığı için boş kaydedilenler. */
+  flagged: { target: string; slot: number }[]
+  /** Herkes hazırdı, aşama AÇILIŞ'a geçti. */
+  advanced: boolean
 }
 
 export type RoomState = OutsiderView | MemberView
@@ -104,13 +130,29 @@ export async function getRoomState(code: string, session?: string): Promise<Room
 }
 
 export type PlayerAction = { action: 'leave' }
-export type AdminAction = { action: 'kick'; playerId: string } | { action: 'delete' }
+export type AdminAction =
+  | { action: 'kick'; playerId: string }
+  | { action: 'delete' }
+  | { action: 'start' }
+  | { action: 'end-writing' }
 
 export const roomAction = (s: RoomSession, a: PlayerAction): Promise<unknown> =>
   call('room-action', json({ code: s.code, session: s.session, ...a }), 'application/json')
 
 export const roomAdmin = (s: RoomSession, a: AdminAction): Promise<unknown> =>
   call('room-admin', json({ code: s.code, session: s.session, ...a }), 'application/json')
+
+/** Taslak kaydı (sinyalsiz); `ready` verilirse hazır durumu da değişir. */
+export async function saveItems(
+  s: RoomSession,
+  items: ItemDraft[],
+  { ready, keepalive }: { ready?: boolean; keepalive?: boolean } = {},
+): Promise<SaveItemsResult> {
+  const body = { code: s.code, session: s.session, action: 'save-items', items, ...(ready === undefined ? {} : { ready }) }
+  const res = (await call('room-action', json(body), 'application/json', { keepalive })) as Partial<SaveItemsResult> | null
+  if (!Array.isArray(res?.flagged)) throw new GameApiError('bad_response')
+  return { flagged: res.flagged, advanced: res.advanced === true }
+}
 
 // ---------------------------------------------------------------------------
 // Hata metinleri
@@ -130,6 +172,11 @@ const MESSAGES: Record<string, string> = {
   not_lobby: 'Oyun başladı; artık odadan çıkılamıyor ya da kimse çıkarılamıyor.',
   not_admin: 'Bu işlemi yalnızca admin yapabilir.',
   not_member: 'Bu odada değilsin.',
+  too_few: 'Başlamak için yeterli oyuncu yok.',
+  not_writing: 'Yazma süresi bitti.',
+  time_up: 'Yazma süresi bitti.',
+  item_too_long: 'Madde en fazla 40 karakter olabilir.',
+  not_assigned: 'Bu madde sana atanmamış. Sayfayı yenile.',
   payload_too_large: 'Fotoğraf çok büyük. Başka bir fotoğraf dene.',
   photo_too_large: 'Fotoğraf çok büyük. Başka bir fotoğraf dene.',
   photo_not_jpeg: 'Fotoğraf okunamadı. Başka bir fotoğraf dene.',

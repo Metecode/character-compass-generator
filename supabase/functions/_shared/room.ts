@@ -8,6 +8,8 @@
  */
 
 import {
+  BULLET_MAX,
+  ROOM_ASSIGNMENT,
   ROOM_DEFAULT_WRITE_SECONDS,
   ROOM_MAX_PLAYERS,
   ROOM_MIN_PLAYERS,
@@ -18,6 +20,7 @@ import {
   type RoomWriteSeconds,
 } from './limits.ts'
 import { cleanPlayerName, type Result } from './play.ts'
+import { containsProfanity } from './profanity.ts'
 
 export { nameKey } from './play.ts'
 
@@ -49,11 +52,21 @@ export interface PlayerRow {
   photo_url: string
   last_seen_at: string
   ready_at: string | null
+  /** Halkadaki yeri (başlatınca karıştırılır); lobide null. İstemciye gitmez. */
+  ring_pos: number | null
+}
+
+/** Bu oyuncunun yazdığı madde (yalnızca kendi maddeleri okunur). */
+export interface ItemRow {
+  target_id: string
+  slot: number
+  text: string
 }
 
 export const ROOM_COLUMNS =
   'code, channel_id, mode, write_seconds, allow_profanity, phase, creator_name, admin_player_id, grid_size, writing_ends_at, reveal_index, reveal_step, version, created_at, expires_at'
-export const PLAYER_COLUMNS = 'id, seq, name, photo_url, last_seen_at, ready_at'
+export const PLAYER_COLUMNS = 'id, seq, name, photo_url, last_seen_at, ready_at, ring_pos'
+export const ITEM_COLUMNS = 'target_id, slot, text'
 
 // ---------------------------------------------------------------------------
 // İstek doğrulaması
@@ -116,13 +129,77 @@ export function parseJoin(data: unknown): Result<{ code: string; name: string }>
  * room-action / room-admin: `action` beyaz listede olmalı. Liste her teslimat
  * parçasında genişler; listede olmayan eylem 400 invalid_action döner.
  */
-export const ROOM_PLAYER_ACTIONS = ['leave'] as const
-export const ROOM_ADMIN_ACTIONS = ['kick', 'delete'] as const
+export const ROOM_PLAYER_ACTIONS = ['leave', 'save-items'] as const
+export const ROOM_ADMIN_ACTIONS = ['kick', 'delete', 'start', 'end-writing'] as const
 export type RoomPlayerAction = (typeof ROOM_PLAYER_ACTIONS)[number]
 export type RoomAdminAction = (typeof ROOM_ADMIN_ACTIONS)[number]
 
 export function parseAction<A extends string>(v: unknown, allowed: readonly A[]): A | null {
   return typeof v === 'string' && (allowed as readonly string[]).includes(v) ? (v as A) : null
+}
+
+export interface ItemInput {
+  target: string
+  slot: number
+  text: string
+}
+
+// oxlint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/
+
+/** Madde metni: kontrol karakteri yok, boşluklar sadeleşir, en fazla BULLET_MAX karakter. Boş olabilir. */
+export function cleanItemText(v: unknown): Result<string> {
+  if (typeof v !== 'string' || CONTROL_CHARS.test(v)) return { ok: false, error: 'invalid_item' }
+  const text = v.normalize('NFC').trim().replace(/\s+/g, ' ')
+  if (Array.from(text).length > BULLET_MAX) return { ok: false, error: 'item_too_long' }
+  return { ok: true, value: text }
+}
+
+/**
+ * room-action save-items gövdesi: { items: [{ target, slot, text }] (en fazla 3), ready? }.
+ * Aynı (hedef, yuva) iki kez gelemez. Atamaya ait olup olmadığını veritabanı denetler.
+ */
+export function parseSaveItems(body: Record<string, unknown>): Result<{ items: ItemInput[]; ready: boolean | null }> {
+  const raw = body.items ?? []
+  if (!Array.isArray(raw) || raw.length > 3) return { ok: false, error: 'invalid_payload' }
+  let ready: boolean | null = null
+  if (body.ready !== undefined) {
+    if (typeof body.ready !== 'boolean') return { ok: false, error: 'invalid_payload' }
+    ready = body.ready
+  }
+  const items: ItemInput[] = []
+  const seen = new Set<string>()
+  for (const it of raw) {
+    if (!isRecord(it) || !isUuid(it.target)) return { ok: false, error: 'invalid_payload' }
+    if (typeof it.slot !== 'number' || !Number.isInteger(it.slot) || it.slot < 0 || it.slot > 2) {
+      return { ok: false, error: 'invalid_payload' }
+    }
+    const key = `${it.target}:${it.slot}`
+    if (seen.has(key)) return { ok: false, error: 'invalid_payload' }
+    seen.add(key)
+    const text = cleanItemText(it.text)
+    if (!text.ok) return text
+    items.push({ target: it.target, slot: it.slot, text: text.value })
+  }
+  return { ok: true, value: { items, ready } }
+}
+
+/**
+ * Argo kapalı odada süzgece takılan maddeler boş kaydedilir ve istemciye bildirilir
+ * (istemci alanın altında uyarı gösterir; yazılan metin cihazda kalır).
+ */
+export function screenItems(
+  items: readonly ItemInput[],
+  allowProfanity: boolean,
+): { items: ItemInput[]; flagged: { target: string; slot: number }[] } {
+  if (allowProfanity) return { items: [...items], flagged: [] }
+  const flagged: { target: string; slot: number }[] = []
+  const out = items.map((it) => {
+    if (!containsProfanity(it.text)) return it
+    flagged.push({ target: it.target, slot: it.slot })
+    return { ...it, text: '' }
+  })
+  return { items: out, flagged }
 }
 
 // ---------------------------------------------------------------------------
@@ -183,17 +260,77 @@ export interface MemberView {
   creatorName: string
   expiresAt: string
   players: MemberPlayer[]
+  /** Yalnızca YAZMA aşamasında. */
+  writing?: WritingView
+}
+
+/**
+ * YAZMA aşamasında oyuncunun kendi görevi. Hedefler `players` listesindeki
+ * kimliklerle verilir; yalnızca bu oyuncunun yazdığı metinler döner. Kimin kime
+ * yazdığı (halka) ve hazır olanların kimliği dönmez, yalnızca sayısı.
+ */
+export interface WritingView {
+  /** Sürenin bittiği an (sunucu saati, ms). */
+  endsAt: number
+  readyCount: number
+  total: number
+  meReady: boolean
+  /** Halka sırasıyla: Klasik'te 3 hedef × 1 madde, Hızlı'da 1 hedef × 3 madde. */
+  assignments: { targetId: string; texts: string[] }[]
 }
 
 export const channelTopic = (channelId: string): string => `room-${channelId}`
 
 /**
- * Üyenin görünümü. Bu parçada (A) yalnızca lobi verisi döner; yazma, açılış ve
- * sonuç alanları sonraki parçalarda eklenir. Oyuncu satırından yalnızca ad,
- * imzalı foto adresi ve çevrimiçi bilgisi çıkar.
+ * Oyuncunun yazma görevi: halkada kendinden sonraki hedefler, her biri için
+ * kendi yazdığı metinler (yuva sırasıyla). Halka kurulmadıysa boş.
  */
-export function projectMember(room: RoomRow, players: readonly PlayerRow[], meId: string, now: number): MemberView {
+export function assignmentsFor(
+  mode: RoomMode,
+  players: readonly Pick<PlayerRow, 'id' | 'ring_pos'>[],
+  meId: string,
+  myItems: readonly ItemRow[],
+): WritingView['assignments'] {
+  const me = players.find((p) => p.id === meId)
+  const n = players.length
+  if (!me || me.ring_pos === null) return []
+  const byPos = new Map(players.map((p) => [p.ring_pos, p.id]))
+  const { targets, slots } = ROOM_ASSIGNMENT[mode]
+  const out: WritingView['assignments'] = []
+  for (let d = 1; d <= targets; d++) {
+    const targetId = byPos.get((me.ring_pos + d) % n)
+    if (!targetId || targetId === meId) continue
+    const texts = Array.from({ length: slots }, (_, slot) =>
+      myItems.find((it) => it.target_id === targetId && it.slot === slot)?.text ?? '',
+    )
+    out.push({ targetId, texts })
+  }
+  return out
+}
+
+/**
+ * Üyenin görünümü. Oyuncu satırından yalnızca ad, imzalı foto adresi ve çevrimiçi
+ * bilgisi çıkar. YAZMA'da `writing` eklenir (yalnızca kendi maddeleri);
+ * açılış ve sonuç alanları C parçasında.
+ */
+export function projectMember(
+  room: RoomRow,
+  players: readonly PlayerRow[],
+  meId: string,
+  now: number,
+  myItems: readonly ItemRow[] = [],
+): MemberView {
   const sorted = [...players].sort((a, b) => a.seq - b.seq)
+  const writing: WritingView | undefined =
+    room.phase === 'writing' && room.writing_ends_at
+      ? {
+          endsAt: Date.parse(room.writing_ends_at),
+          readyCount: players.filter((p) => p.ready_at !== null).length,
+          total: players.length,
+          meReady: players.find((p) => p.id === meId)?.ready_at != null,
+          assignments: assignmentsFor(room.mode, players, meId, myItems),
+        }
+      : undefined
   return {
     view: 'member',
     phase: room.phase,
@@ -217,8 +354,13 @@ export function projectMember(room: RoomRow, players: readonly PlayerRow[], meId
       isAdmin: room.admin_player_id === p.id,
       online: isOnline(p.last_seen_at, now),
     })),
+    ...(writing ? { writing } : {}),
   }
 }
+
+/** Süre (ve kayıt payı) doldu mu: ilk durum isteği aşamayı ilerletir. */
+export const writingExpired = (room: Pick<RoomRow, 'phase' | 'writing_ends_at'>, now: number, graceSeconds: number): boolean =>
+  room.phase === 'writing' && room.writing_ends_at !== null && now > Date.parse(room.writing_ends_at) + graceSeconds * 1000
 
 /** Admin devri denetlenmeli mi (veritabanında kilitli işlem gerekmeden önce ucuz ön kontrol). */
 export function adminLooksAway(
