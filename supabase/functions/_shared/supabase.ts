@@ -10,7 +10,7 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0'
 import { corsHeaders, errorJson, isOriginAllowed } from './http.ts'
 import { clientIp, rateLimitKey } from './ip.ts'
-import { RATE_LIMITS, type RateLimitedAction } from './limits.ts'
+import { CREATE_GAME_LIMITS, RATE_LIMITS, type RateLimitedAction } from './limits.ts'
 
 export const PHOTO_BUCKET = 'game-photos'
 
@@ -91,6 +91,35 @@ export async function checkRateLimit(
   })
   if (error) throw new Error('rate limit check failed')
   return data === true
+}
+
+/**
+ * create-game'in çok pencereli limiti (CREATE_GAME_LIMITS). 0 → istek devam
+ * edebilir; > 0 → en erken kaç saniye sonra tekrar denenebilir. Reddedilen
+ * istek kotadan düşmez. Tuz ya da veritabanı hatasında fail-closed (istisna → 500).
+ */
+export async function takeCreateGameLimit(db: SupabaseClient, req: Request): Promise<number> {
+  const salt = env('RATE_LIMIT_SALT')
+  if (!salt || salt.length < 32) throw new Error('RATE_LIMIT_SALT missing')
+  const ip = clientIp(req.headers, env('CLIENT_IP_HEADER'))
+  const keys = await Promise.all(CREATE_GAME_LIMITS.map((l) => rateLimitKey(ip, salt, l.key)))
+  const { data, error } = await db.rpc('rate_limit_take', {
+    p_keys: keys,
+    p_maxes: CREATE_GAME_LIMITS.map((l) => l.max),
+    p_windows: CREATE_GAME_LIMITS.map((l) => l.windowSeconds),
+  })
+  if (error || typeof data !== 'number') throw new Error('rate limit check failed')
+  return data
+}
+
+/** Süresi dolmamış oyun sayısı (MAX_ACTIVE_GAMES denetimi). */
+export async function activeGameCount(db: SupabaseClient): Promise<number> {
+  const { count, error } = await db
+    .from('games')
+    .select('code', { count: 'exact', head: true })
+    .gt('expires_at', new Date().toISOString())
+  if (error || count === null) throw new Error('active game count failed')
+  return count
 }
 
 type Handler = (req: Request, origin: string | null) => Promise<Response>

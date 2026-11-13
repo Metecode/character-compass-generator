@@ -6,9 +6,12 @@
 
 export class GameApiError extends Error {
   readonly code: string
-  constructor(code: string) {
+  /** 429'da sunucunun bildirdiği tekrar deneme süresi (sn); yoksa null. */
+  readonly retryAfter: number | null
+  constructor(code: string, retryAfter: number | null = null) {
     super(code)
     this.code = code
+    this.retryAfter = retryAfter
   }
 }
 
@@ -40,7 +43,8 @@ export async function call(path: string, body: BodyInit, contentType?: string): 
       json && typeof json === 'object' && typeof (json as { error?: unknown }).error === 'string'
         ? (json as { error: string }).error
         : `http_${res.status}`
-    throw new GameApiError(code)
+    const retry = json && typeof json === 'object' ? (json as { retry_after?: unknown }).retry_after : undefined
+    throw new GameApiError(code, typeof retry === 'number' && Number.isFinite(retry) && retry > 0 ? retry : null)
   }
   return json
 }

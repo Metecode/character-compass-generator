@@ -21,7 +21,7 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 
 | Fonksiyon | Kim çağırır | Yetki | Hız limiti |
 |---|---|---|---|
-| `create-game` | Tarayıcı | `apikey` = publishable anahtar | IP başına saatte 5 |
+| `create-game` | Tarayıcı | `apikey` = publishable anahtar | IP başına saatte 15 ve günde 40; sistemde en fazla 1000 aktif oyun |
 | `delete-game` | Tarayıcı | publishable + `delete_token` | IP başına saatte 30 |
 | `get-game` | Tarayıcı (`/g/{code}`) | publishable + `device` | IP başına saatte 120 |
 | `start-game` | Tarayıcı (ad girilip oyuna başlanınca) | publishable + `device` | IP başına saatte 120 |
@@ -139,14 +139,26 @@ dizi ya da 4xx, public adres 400/404. Hiçbir satır ya da dosya adı dönmemeli
    select status, start_time from cron.job_run_details order by start_time desc limit 5;
    ```
 
-### c) Hız limiti 6. istekte devreye girer
+### c) Hız limiti 16. istekte devreye girer
 
-Geçerli bir gövdeyle 6 ardışık `create-game` isteği: ilk 5 → 201, 6. → 429. Ardından
-oluşan 5 test oyunu `delete-game` ile silinir ve IP'nin kilidi açılır:
-```sql
-delete from public.rate_limits where key like '%:create-game' or key like '%:delete-game';
+Değerler tek yerde: `_shared/limits.ts` → `CREATE_GAME_LIMITS` (IP başına saatte 15, günde 40)
+ve `MAX_ACTIVE_GAMES` (1000). `create-game` iki pencereyi `rate_limit_take` ile birlikte
+denetler; reddedilen istek kotadan düşmez. Yanıt `429 { error: 'rate_limited', retry_after }`
+(saniye, ayrıca `Retry-After` başlığı); ön yüz "Yaklaşık X dakika sonra tekrar dene" yazar.
+Aktif oyun tavanında `503 { error: 'too_many_games' }`.
+
+Geçerli bir gövdeyle 16 ardışık `create-game` isteği: ilk 15 → 201, 16. → 429 ve
+`retry_after` ≈ 3600'den az. Ardından oluşan 15 test oyunu `delete-game` ile silinir.
+
+**Test sırasında limite takılınca (ya da testten sonra) `rate_limits`'i temizle.** Günlük
+pencere nedeniyle `create-game-day` satırı 24 saat durur; temizlenmezse aynı IP'den o gün
+yalnızca 25 oyun daha açılabilir. Anahtar `SHA-256(tuz|IP):işlem` biçimindedir; IP'yi
+bilmeden yalnızca işlem adına göre silinir:
+```sh
+npx supabase db query --remote --yes   "delete from public.rate_limits where key like '%:create-game' or key like '%:create-game-day' or key like '%:delete-game';"
 ```
-(Test sırasında başka kullanıcı yoksa bu güvenlidir; satırlar zaten en geç 1 saatte silinir.)
+(Test sırasında başka kullanıcı yoksa güvenlidir; en kötü ihtimalle başkalarının sayacı da
+sıfırlanır. Satırlar zaten en geç 1 günde silinir: `purge-rate-limits`.)
 
 ### d) Secret anahtar repoda ve build'de yok
 

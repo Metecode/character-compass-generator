@@ -9,6 +9,7 @@
 import { BLUR_MAX_BYTES, BLUR_SIZE, GAME_PHOTO_MAX_BYTES, PHOTO_SIZE } from '../constants'
 import { GameApiError, call, config } from './apiClient'
 import type { Compass } from '../types'
+import { rateLimitMessage } from './gameLink'
 import { buildGamePayload, dropMissingPhotos } from './gamePayload'
 import { getPhoto } from './photos'
 
@@ -139,10 +140,17 @@ export async function deleteGame(code: string, deleteToken: string): Promise<voi
 const MESSAGES: Record<string, string> = {
   not_configured: 'Oyun linki şu an kullanılamıyor.',
   network: 'Sunucuya ulaşılamadı. İnternet bağlantını kontrol edip tekrar dener misin?',
-  rate_limited: 'Bir saatte en fazla 5 oyun linki oluşturulabilir. Biraz sonra tekrar dene.',
+  rate_limited: 'Çok fazla deneme yapıldı, biraz sonra tekrar dene.',
+  too_many_games: 'Şu an çok fazla aktif oyun var, biraz sonra tekrar dene.',
   payload_too_large: 'Fotoğraflar çok büyük. Birkaç fotoğrafı değiştirip tekrar dene.',
   not_enough_cells: 'Oyun için en az 4 hücrede isim ve en az bir madde olmalı.',
 }
 
 export const gameErrorMessage = (e: unknown, fallback: string): string =>
   (e instanceof GameApiError && MESSAGES[e.code]) || fallback
+
+/** Oyun linki oluşturma hataları: hız limitinde ne zaman tekrar denenebileceği yazar. */
+export function createGameErrorMessage(e: unknown, fallback: string): string {
+  if (e instanceof GameApiError && e.code === 'rate_limited') return rateLimitMessage(e.retryAfter)
+  return gameErrorMessage(e, fallback)
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inviteMessage, scoreMessage } from '../gameLink'
+import { inviteMessage, rateLimitMessage, retryWaitText, scoreMessage } from '../gameLink'
 
 const URL = 'https://compass.meteucar.com/g/abc123abc123abcd'
 
@@ -29,5 +29,23 @@ describe('scoreMessage', () => {
     expect(scoreMessage({ points2: 7, total: 4, durationSeconds: null }, URL).text).toBe(
       "4'te 3,5 bildim. Sen kaç yaparsın?",
     )
+  })
+})
+
+describe('hız limiti mesajı', () => {
+  it('dakika yukarı yuvarlanır, uzun bekleme saatle yazılır', () => {
+    expect(retryWaitText(1)).toBe('1 dakika')
+    expect(retryWaitText(60)).toBe('1 dakika')
+    expect(retryWaitText(61)).toBe('2 dakika')
+    expect(retryWaitText(3599)).toBe('60 dakika')
+    expect(retryWaitText(89 * 60)).toBe('89 dakika')
+    expect(retryWaitText(90 * 60)).toBe('2 saat')
+    expect(retryWaitText(20 * 3600 + 5)).toBe('21 saat')
+  })
+
+  it('ne zaman tekrar denenebileceğini söyler, limit sayısı içermez', () => {
+    expect(rateLimitMessage(754)).toBe('Bu ağdan çok fazla oyun oluşturuldu. Yaklaşık 13 dakika sonra tekrar dene.')
+    expect(rateLimitMessage(null)).toBe('Bu ağdan çok fazla oyun oluşturuldu. Biraz sonra tekrar dene.')
+    expect(rateLimitMessage(754)).not.toMatch(/\b(5|15|40) oyun/)
   })
 })

@@ -69,7 +69,7 @@ export function GameLinkDialog({ onClose, onOpenMyGames }: Props) {
       })
       setCreated({ code: game.code, expiresAt: game.expiresAt, creatorName: name })
     } catch (e) {
-      setError(api.gameErrorMessage(e, 'Oyun linki oluşturulamadı. Tekrar dener misin?'))
+      setError(api.createGameErrorMessage(e, 'Oyun linki oluşturulamadı. Tekrar dener misin?'))
     } finally {
       setBusy(false)
     }

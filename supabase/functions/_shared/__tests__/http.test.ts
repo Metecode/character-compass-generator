@@ -5,9 +5,19 @@ import {
   LengthRequiredError,
   corsHeaders,
   isOriginAllowed,
+  rateLimitedJson,
   readBodyLimited,
 } from '../http.ts'
 import { clientIp, rateLimitKey } from '../ip.ts'
+
+describe('rateLimitedJson', () => {
+  it('429, gövdede ve başlıkta tekrar deneme süresi', async () => {
+    const res = rateLimitedJson(754, 'https://compass.meteucar.com')
+    expect(res.status).toBe(429)
+    expect(res.headers.get('Retry-After')).toBe('754')
+    expect(await res.json()).toEqual({ error: 'rate_limited', retry_after: 754 })
+  })
+})
 
 describe('CORS', () => {
   it('yalnızca yayın ve yerel geliştirme adresine izin verir', () => {

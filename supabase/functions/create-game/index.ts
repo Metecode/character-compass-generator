@@ -4,16 +4,22 @@
  * Pusulanın anlık görüntüsünü ve fotoğraflarını seçilen süre için saklar.
  * Döner: { code, expires_at, delete_token } — delete_token yalnızca bu yanıtta
  * vardır; sunucuda yalnızca SHA-256 özeti tutulur.
+ *
+ * Limitler (_shared/limits.ts): IP başına CREATE_GAME_LIMITS (429 rate_limited +
+ * retry_after) ve sistem genelinde MAX_ACTIVE_GAMES aktif oyun (503 too_many_games).
+ * Tavan, limit kotası harcanmadan önce denetlenir; satır yazıldıktan sonra yeniden
+ * denetlenir, böylece eşzamanlı isteklerde aşılmaz (aşan istek kendi satırını siler).
  */
 
-import { bodyErrorResponse, errorJson, json, readBodyLimited } from '../_shared/http.ts'
-import { MAX_BODY_BYTES } from '../_shared/limits.ts'
+import { bodyErrorResponse, errorJson, json, rateLimitedJson, readBodyLimited } from '../_shared/http.ts'
+import { MAX_ACTIVE_GAMES, MAX_BODY_BYTES } from '../_shared/limits.ts'
 import {
   PHOTO_BUCKET,
+  activeGameCount,
   adminClient,
-  checkRateLimit,
   hasPublishableKey,
   serve,
+  takeCreateGameLimit,
 } from '../_shared/supabase.ts'
 import { randomCode, randomToken, sha256Hex } from '../_shared/tokens.ts'
 import { validateGame } from '../_shared/validate.ts'
@@ -32,9 +38,9 @@ serve('create-game', ['POST'], async (req, origin) => {
   if (declared > MAX_BODY_BYTES) return errorJson('payload_too_large', 413, origin)
 
   const db = adminClient()
-  if (!(await checkRateLimit(db, req, 'create-game'))) {
-    return errorJson('rate_limited', 429, origin)
-  }
+  if ((await activeGameCount(db)) >= MAX_ACTIVE_GAMES) return errorJson('too_many_games', 503, origin)
+  const retryAfter = await takeCreateGameLimit(db, req)
+  if (retryAfter > 0) return rateLimitedJson(retryAfter, origin)
 
   let body: Uint8Array<ArrayBuffer>
   try {
@@ -98,6 +104,12 @@ serve('create-game', ['POST'], async (req, origin) => {
     delete_token_hash: await sha256Hex(deleteToken),
   })
   if (insertError) throw new Error('game insert failed')
+
+  // Eşzamanlı isteklerde tavan aşıldıysa bu oyun geri alınır (dosya henüz yüklenmedi).
+  if ((await activeGameCount(db)) > MAX_ACTIVE_GAMES) {
+    await db.from('games').delete().eq('code', code)
+    return errorJson('too_many_games', 503, origin)
+  }
 
   // Satır önce yazılır: bir adım yarıda kalsa bile cleanup bu oyunu ve
   // dosyalarını süre dolunca bulur.

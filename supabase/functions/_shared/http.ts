@@ -50,6 +50,15 @@ export function json(
 export const errorJson = (code: string, status: number, origin: string | null): Response =>
   json({ error: code }, status, origin)
 
+/**
+ * 429: tekrar deneme süresi hem gövdede (`retry_after`, saniye; tarayıcı bunu
+ * okur) hem Retry-After başlığında.
+ */
+export const rateLimitedJson = (retryAfterSeconds: number, origin: string | null): Response =>
+  json({ error: 'rate_limited', retry_after: retryAfterSeconds }, 429, origin, {
+    'Retry-After': String(retryAfterSeconds),
+  })
+
 export class BodyTooLargeError extends Error {}
 export class LengthRequiredError extends Error {}
 

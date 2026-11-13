@@ -41,7 +41,19 @@ describe('sunucu limitleri ön yüzle aynı', () => {
     ).toBeLessThan(server.MAX_BODY_BYTES)
   })
 
-  it('create-game: saatte 5', () => {
-    expect(server.RATE_LIMITS['create-game']).toEqual({ max: 5, windowSeconds: 3600 })
+  it('create-game: IP başına saatte 15, günde 40; aynı anda en fazla 1000 aktif oyun', () => {
+    expect(server.CREATE_GAME_LIMITS).toEqual([
+      { key: 'create-game', max: 15, windowSeconds: 3600 },
+      { key: 'create-game-day', max: 40, windowSeconds: 86400 },
+    ])
+    expect(server.MAX_ACTIVE_GAMES).toBe(1000)
+    // Günlük limit saatliğin üstünde; pencereler rate_limit_take sınırında (1 gün).
+    const [hour, day] = server.CREATE_GAME_LIMITS
+    expect(day.max).toBeGreaterThan(hour.max)
+    for (const l of server.CREATE_GAME_LIMITS) expect(l.windowSeconds).toBeLessThanOrEqual(86400)
+    // Anahtarlar diğer işlemlerle çakışmaz.
+    const keys = server.CREATE_GAME_LIMITS.map((l) => l.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    for (const k of keys.slice(1)) expect(Object.keys(server.RATE_LIMITS)).not.toContain(k)
   })
 })

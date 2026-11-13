@@ -47,8 +47,20 @@ export const GUESSES_MAX = 200
 /** Net fotoğrafların imzalı adres ömrü (saniye). */
 export const SIGNED_URL_SECONDS = 600
 
+/**
+ * create-game: IP başına birden çok pencere; istek hepsine sığmalıysa kabul edilir
+ * (reddedilen istek hiçbir pencereden düşmez). `key`, rate_limits anahtarının
+ * işlem kısmıdır. Pencere en fazla 1 gün (rate_limit_take ve purge-rate-limits).
+ */
+export const CREATE_GAME_LIMITS = [
+  { key: 'create-game', max: 15, windowSeconds: 3600 },
+  { key: 'create-game-day', max: 40, windowSeconds: 86400 },
+] as const
+
+/** Sistemde aynı anda en fazla bu kadar süresi dolmamış oyun olabilir. */
+export const MAX_ACTIVE_GAMES = 1000
+
 export const RATE_LIMITS = {
-  'create-game': { max: 5, windowSeconds: 3600 },
   'delete-game': { max: 30, windowSeconds: 3600 },
   'get-game': { max: 120, windowSeconds: 3600 },
   'use-hint': { max: 120, windowSeconds: 3600 },

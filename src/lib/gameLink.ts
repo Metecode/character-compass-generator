@@ -47,3 +47,17 @@ export function scoreMessage(
   const time = score.durationSeconds != null ? `, ${formatDuration(score.durationSeconds)}` : ''
   return withLink(`${scoreLabel(score.points2, score.total)} bildim${time}. Sen kaç yaparsın?`, url)
 }
+
+/** Tekrar deneme süresi: "5 dakika", "2 saat" (yaklaşık, yukarı yuvarlanır). */
+export function retryWaitText(seconds: number): string {
+  const minutes = Math.max(1, Math.ceil(seconds / 60))
+  if (minutes < 90) return `${minutes} dakika`
+  return `${Math.ceil(minutes / 60)} saat`
+}
+
+/** Oyun linki oluşturma hız limiti; limit sayısı bilerek yazılmaz. */
+export function rateLimitMessage(retryAfter: number | null): string {
+  return retryAfter
+    ? `Bu ağdan çok fazla oyun oluşturuldu. Yaklaşık ${retryWaitText(retryAfter)} sonra tekrar dene.`
+    : 'Bu ağdan çok fazla oyun oluşturuldu. Biraz sonra tekrar dene.'
+}
