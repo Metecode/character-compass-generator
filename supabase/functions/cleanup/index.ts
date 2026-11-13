@@ -9,10 +9,20 @@
  * İş:
  *  1) Süresi dolan oyunların dosyalarını Storage API ile, ardından satırlarını siler.
  *  2) Kovada satırı olmayan klasörleri (yarım kalmış işlemlerden yetim dosyalar) siler.
+ *  3) Aynısını canlı odalar için yapar (rooms + room-photos kovası). Oda süresi:
+ *     kuruluştan en geç 2 saat, oyun bittikten 30 dakika sonra (expires_at).
  */
 
 import { errorJson, json } from '../_shared/http.ts'
-import { PHOTO_BUCKET, adminClient, deleteGameCompletely, serve } from '../_shared/supabase.ts'
+import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0'
+import {
+  PHOTO_BUCKET,
+  ROOM_PHOTO_BUCKET,
+  adminClient,
+  deleteGameCompletely,
+  deleteRoomCompletely,
+  serve,
+} from '../_shared/supabase.ts'
 
 const BATCH = 50
 
@@ -36,6 +46,7 @@ serve('cleanup', ['POST'], async (req, origin) => {
 
   let deleted = 0
   let failed = 0
+  let orphans = 0
   for (const { code } of expired ?? []) {
     try {
       await deleteGameCompletely(db, code as string)
@@ -46,29 +57,57 @@ serve('cleanup', ['POST'], async (req, origin) => {
   }
 
   // 2) Yetim klasörler: kovada var, games'te satırı yok.
-  let orphans = 0
-  const { data: folders, error: listError } = await db.storage
-    .from(PHOTO_BUCKET)
-    .list('', { limit: 1000 })
-  if (listError) throw new Error('bucket list failed')
-  const folderNames = (folders ?? []).filter((f) => f.id === null).map((f) => f.name)
-  if (folderNames.length > 0) {
-    const { data: live, error: liveError } = await db
-      .from('games')
-      .select('code')
-      .in('code', folderNames)
-    if (liveError) throw new Error('live lookup failed')
-    const liveCodes = new Set((live ?? []).map((g) => g.code as string))
-    for (const name of folderNames) {
-      if (liveCodes.has(name)) continue
-      const { data: files } = await db.storage.from(PHOTO_BUCKET).list(name, { limit: 100 })
-      const paths = (files ?? []).map((f) => `${name}/${f.name}`)
-      if (paths.length === 0) continue
-      const { error: removeError } = await db.storage.from(PHOTO_BUCKET).remove(paths)
-      if (removeError) failed++
-      else orphans++
+  const games = await removeOrphans(db, PHOTO_BUCKET, 'games')
+  orphans += games.orphans
+  failed += games.failed
+
+  // 3) Canlı odalar: süresi dolanlar ve yetim klasörler.
+  const { data: expiredRooms, error: roomError } = await db
+    .from('rooms')
+    .select('code')
+    .lte('expires_at', new Date().toISOString())
+    .order('expires_at', { ascending: true })
+    .limit(BATCH)
+  if (roomError) throw new Error('expired room lookup failed')
+  let rooms = 0
+  for (const { code } of expiredRooms ?? []) {
+    try {
+      await deleteRoomCompletely(db, code as string)
+      rooms++
+    } catch {
+      failed++
     }
   }
+  const roomOrphans = await removeOrphans(db, ROOM_PHOTO_BUCKET, 'rooms')
+  orphans += roomOrphans.orphans
+  failed += roomOrphans.failed
 
-  return json({ deleted, orphans, failed }, 200, origin)
+  return json({ deleted, rooms, orphans, failed }, 200, origin)
 })
+
+/** Kovada klasörü olup tabloda satırı olmayan (yarım kalmış işlemlerden) dosyaları siler. */
+async function removeOrphans(
+  db: SupabaseClient,
+  bucket: string,
+  table: 'games' | 'rooms',
+): Promise<{ orphans: number; failed: number }> {
+  let orphans = 0
+  let failed = 0
+  const { data: folders, error: listError } = await db.storage.from(bucket).list('', { limit: 1000 })
+  if (listError) throw new Error('bucket list failed')
+  const folderNames = (folders ?? []).filter((f) => f.id === null).map((f) => f.name)
+  if (folderNames.length === 0) return { orphans, failed }
+  const { data: live, error: liveError } = await db.from(table).select('code').in('code', folderNames)
+  if (liveError) throw new Error('live lookup failed')
+  const liveCodes = new Set((live ?? []).map((g) => g.code as string))
+  for (const name of folderNames) {
+    if (liveCodes.has(name)) continue
+    const { data: files } = await db.storage.from(bucket).list(name, { limit: 100 })
+    const paths = (files ?? []).map((f) => `${name}/${f.name}`)
+    if (paths.length === 0) continue
+    const { error: removeError } = await db.storage.from(bucket).remove(paths)
+    if (removeError) failed++
+    else orphans++
+  }
+  return { orphans, failed }
+}

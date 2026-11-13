@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inviteMessage, rateLimitMessage, retryWaitText, scoreMessage } from '../gameLink'
+import { inviteMessage, rateLimitMessage, retryWaitText, roomInviteMessage, scoreMessage } from '../gameLink'
 
 const URL = 'https://compass.meteucar.com/g/abc123abc123abcd'
 
@@ -47,5 +47,14 @@ describe('hız limiti mesajı', () => {
     expect(rateLimitMessage(754)).toBe('Bu ağdan çok fazla oyun oluşturuldu. Yaklaşık 13 dakika sonra tekrar dene.')
     expect(rateLimitMessage(null)).toBe('Bu ağdan çok fazla oyun oluşturuldu. Biraz sonra tekrar dene.')
     expect(rateLimitMessage(754)).not.toMatch(/\b(5|15|40) oyun/)
+  })
+})
+
+describe('roomInviteMessage', () => {
+  it('davet metni; link yalnızca kopyalanan metinde', () => {
+    const m = roomInviteMessage(' Mete ', 'https://compass.meteucar.com/r/AbC')
+    expect(m.text).toBe('Mete seni canlı pusula oyununa çağırıyor')
+    expect(m.text).not.toContain('http')
+    expect(m.copy).toBe('Mete seni canlı pusula oyununa çağırıyor 👉 https://compass.meteucar.com/r/AbC')
   })
 })

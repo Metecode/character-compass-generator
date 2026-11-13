@@ -7,10 +7,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
     rollupOptions: {
-      // g.html: /g/* oyun linkleri için aynı uygulama, farklı sosyal önizleme.
+      // g.html / r.html: /g/* oyun ve /r/* oda linkleri için aynı uygulama, farklı sosyal önizleme.
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         game: fileURLToPath(new URL('./g.html', import.meta.url)),
+        room: fileURLToPath(new URL('./r.html', import.meta.url)),
       },
     },
   },

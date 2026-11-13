@@ -29,9 +29,15 @@ pnpm + Node 22.20.0 (`.nvmrc`).
   Doğrulama `supabase/functions/_shared/` içinde saf TS'dir ve vitest ile test edilir;
   sunucu limitleri `_shared/limits.ts`'te kopya durur, `limits.test.ts` `src/constants.ts` ile eşleştirir.
   Oyunlarım listesi ve delete_token `compass-games` anahtarında (`src/store/gamesStore.ts`), pusula şemasından ayrı.
+- Canlı oda (Aşama 4, `/r/{code}`): sunucu tek doğruluk kaynağı; fonksiyonlar `create-room`,
+  `join-room`, `get-room-state`, `room-action`, `room-admin` (`action` beyaz listeli). Görünüm
+  `_shared/room.ts` → `projectMember`/`projectOutsider`; yazarlık hiçbir istemciye gitmez.
+  Realtime kanalı yalnızca boş sinyal taşır, istemci sinyalde durumu yeniden çeker
+  (`src/lib/roomSync.ts`, `src/hooks/useRoom.ts`); `@supabase/realtime-js` yalnızca oda parçasında.
+  Oturum anahtarı `compass-rooms`'ta (`src/store/roomsStore.ts`).
 - `/g/*` linkleri `g.html` girişinden açılır (aynı `src/main.tsx`, yalnızca og/twitter etiketleri
   farklı; `public/_redirects`'te genel kuraldan önce). Önizleme görseli `public/og-game.png`,
-  kaynağı `scripts/og-game.html` → `pnpm og:game`. `index.html`'in etiketleri ana sayfanındır.
+  kaynağı `scripts/og-game.html` → `pnpm og:game`. `/r/*` aynı şekilde: `r.html`, `public/og-room.png` (`pnpm og:room`). `index.html`'in etiketleri ana sayfanındır.
 - Pusula her zaman 1080×1080 çizilir ve ekrana ölçeklenir; PNG, aynı DOM'dan
   `src/lib/exportPng.ts` ile alınır (fontlar ve fotolar beklenir, `.editor-only` öğeler çıkarılır).
 

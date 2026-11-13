@@ -1,4 +1,6 @@
-// public/og-game.png'yi scripts/og-game.html'den üretir (headless Chrome, 1200×630).
+// Sosyal önizleme görselini üretir (headless Chrome, 1200×630):
+//   node scripts/og-game.mjs        → public/og-game.png  (scripts/og-game.html)
+//   node scripts/og-game.mjs room   → public/og-room.png  (scripts/og-room.html)
 // Chrome yolu: CHROME ortam değişkeni ya da işletim sistemine göre bilinen yer.
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -14,8 +16,9 @@ const candidates = [
 const chrome = candidates.find((p) => existsSync(p))
 if (!chrome) throw new Error('Chrome bulunamadı; CHROME=/yol/chrome ile çalıştır.')
 
-const src = pathToFileURL(fileURLToPath(new URL('./og-game.html', import.meta.url))).href
-const out = fileURLToPath(new URL('../public/og-game.png', import.meta.url))
+const name = process.argv[2] === 'room' ? 'og-room' : 'og-game'
+const src = pathToFileURL(fileURLToPath(new URL(`./${name}.html`, import.meta.url))).href
+const out = fileURLToPath(new URL(`../public/${name}.png`, import.meta.url))
 
 execFileSync(chrome, [
   '--headless=new',

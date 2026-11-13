@@ -23,10 +23,17 @@
   [headers.values]
     Cache-Control = "no-cache"
 
-# Oyun linkleri ve gizlilik sayfası arama motorlarına kapalı (sayfada ayrıca
+# Oyun ve oda linkleri ve gizlilik sayfası arama motorlarına kapalı (sayfada ayrıca
 # <meta name="robots" content="noindex"> var). Ana sayfa indekslenebilir kalır.
 [[headers]]
   for = "/g/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+    Referrer-Policy = "no-referrer"
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/r/*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
     Referrer-Policy = "no-referrer"

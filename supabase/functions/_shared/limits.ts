@@ -69,3 +69,66 @@ export const RATE_LIMITS = {
   'start-game': { max: 120, windowSeconds: 3600 },
 } as const
 export type RateLimitedAction = keyof typeof RATE_LIMITS
+
+// ---------------------------------------------------------------------------
+// Canlı oda (Aşama 4)
+// ---------------------------------------------------------------------------
+
+export const ROOM_MODES = ['classic', 'quick'] as const
+export type RoomMode = (typeof ROOM_MODES)[number]
+/** Başlatmak için gereken en az oyuncu (sunucuda doğrulanır). */
+export const ROOM_MIN_PLAYERS: Record<RoomMode, number> = { classic: 4, quick: 3 }
+export const ROOM_MAX_PLAYERS = 16
+/** Yazma süresi seçenekleri (saniye). */
+export const ROOM_WRITE_SECONDS = [120, 180, 300] as const
+export type RoomWriteSeconds = (typeof ROOM_WRITE_SECONDS)[number]
+export const ROOM_DEFAULT_WRITE_SECONDS: RoomWriteSeconds = 180
+
+/** Oda kodu (base62, ~95 bit) ve Realtime kanal kimliği (base62, ~131 bit). */
+export const ROOM_CODE_LENGTH = 16
+export const ROOM_CHANNEL_ID_LENGTH = 22
+
+/** Oda en geç kuruluştan bu kadar sonra silinir. */
+export const ROOM_MAX_LIFETIME_SECONDS = 2 * 3600
+/** Oyun bittikten sonra oda bu kadar daha durur. */
+export const ROOM_DONE_TTL_SECONDS = 30 * 60
+/** Admin bu kadar görünmezse en eski çevrimiçi oyuncu admin olur. */
+export const ROOM_ADMIN_TIMEOUT_SECONDS = 5 * 60
+/** Son bu kadar saniyede durum isteyen oyuncu çevrimiçi sayılır (nabız aralığının 2 katından fazla). */
+export const ROOM_ONLINE_SECONDS = 150
+/** last_seen_at en fazla bu sıklıkla yazılır (her durum isteğinde değil). */
+export const ROOM_SEEN_WRITE_SECONDS = 20
+
+/** create-room / join-room gövdesi: tek foto (≤150 KB) + küçük JSON + multipart payı. */
+export const ROOM_MAX_BODY_BYTES = 256 * 1024
+
+/** create-room: IP başına saatlik ve günlük pencere (create-game ile aynı mantık). */
+export const CREATE_ROOM_LIMITS = [
+  { key: 'create-room', max: 10, windowSeconds: 3600 },
+  { key: 'create-room-day', max: 30, windowSeconds: 86400 },
+] as const
+/** Sistemde aynı anda en fazla bu kadar süresi dolmamış oda. */
+export const MAX_ACTIVE_ROOMS = 20
+/**
+ * Bitmemiş odalardaki toplam oyuncu tavanı. Ücretsiz planda 200 eşzamanlı
+ * Realtime bağlantısı var; her oyuncu tek bağlantı açar, pay bırakılır.
+ */
+export const MAX_ACTIVE_ROOM_PLAYERS = 180
+
+/** IP başına (oturumu olmayan istekler). Aynı Wi-Fi'daki 16 kişi + tekrar denemeler sığar. */
+export const ROOM_IP_LIMITS = {
+  'join-room': { max: 60, windowSeconds: 3600 },
+  'room-preview': { max: 240, windowSeconds: 3600 },
+} as const
+export type RoomIpAction = keyof typeof ROOM_IP_LIMITS
+
+/**
+ * Oturum anahtarı başına (aynı ağdaki oyuncular birbirinin kotasını yemez).
+ * room-state: istemci iki istek arasında en az 1 sn bekler (en çok 60/dk); pay bırakılır.
+ */
+export const ROOM_SESSION_LIMITS = {
+  'room-state': { max: 90, windowSeconds: 60 },
+  'room-action': { max: 300, windowSeconds: 3600 },
+  'room-admin': { max: 300, windowSeconds: 3600 },
+} as const
+export type RoomSessionAction = keyof typeof ROOM_SESSION_LIMITS

@@ -104,6 +104,11 @@ Kurallar:
 
 ### Aşama 4 — Canlı oda modu
 
+> `feature/live-room` dalında üç parça halinde. **Parça A (13 Kasım 2026):** şema, oda kurma/katılma,
+> lobi, canlı sinyal (public Broadcast + gizli `channel_id`), 5 sn yoklamaya düşme, yeniden bağlanma,
+> admin devri; sunucu canlıda, ön yüz dalda. Ayrıntı ve doğrulama: `docs/supabase.md` → "Canlı oda".
+> Sıradaki: B (atama ve yazma), C (açılış, skor, sonuç, silme).
+
 "Ortak doldurma" fikrinin yerine geçer.
 
 Akış:

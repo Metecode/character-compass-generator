@@ -12,14 +12,14 @@ export interface Toast {
   tone: 'info' | 'error' | 'success'
 }
 
-export type GameDialog = 'create' | 'mine'
+export type GameDialog = 'create' | 'mine' | 'room'
 /** Pusula ayar pencereleri (masaüstünde araç çubuğundan, mobilde "⋯" menüsünden açılır). */
 export type CompassDialog = 'theme' | 'quadrants' | 'reset'
 
 interface UiState {
   crop: CropRequest | null
   toast: Toast | null
-  /** Açık oyun linki penceresi ("Oyun linki oluştur" ya da "Oyunlarım"). */
+  /** Açık oyun penceresi ("Oyun linki oluştur", "Oyunlarım" ya da "Canlı oda kur"). */
   gameDialog: GameDialog | null
   setGameDialog: (d: GameDialog | null) => void
   compassDialog: CompassDialog | null

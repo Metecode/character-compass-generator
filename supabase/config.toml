@@ -454,3 +454,18 @@ verify_jwt = false
 
 [functions.start-game]
 verify_jwt = false
+
+[functions.create-room]
+verify_jwt = false
+
+[functions.join-room]
+verify_jwt = false
+
+[functions.get-room-state]
+verify_jwt = false
+
+[functions.room-action]
+verify_jwt = false
+
+[functions.room-admin]
+verify_jwt = false

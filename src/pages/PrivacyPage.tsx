@@ -19,7 +19,8 @@ export default function PrivacyPage() {
       <h1 className="text-2xl font-black tracking-tight">Gizlilik</h1>
       <p className="mt-2 text-[15px] leading-relaxed">
         Character Compass’ta hesap yok, çerez yok. Kısaca: pusulan cihazında kalır; yalnızca sen
-        “Oyun linki oluştur” dediğinde, seçtiğin süre boyunca sunucuya gider.
+        “Oyun linki oluştur” dediğinde seçtiğin süre boyunca, “Canlı oda kur” dediğinde ya da bir
+        odaya katıldığında da oyun bitene kadar sunucuya gider.
       </p>
 
       <Section title="Pusula yaparken (varsayılan)">
@@ -36,7 +37,7 @@ export default function PrivacyPage() {
           <li>Hücrelerdeki fotoğraflar (400×400 JPEG) ve ipucu için bulanık küçük sürümleri (32×32)</li>
           <li>
             Kötüye kullanımı sınırlamak için IP adresinin tuzlanmış özeti. Ham IP adresi
-            saklanmaz; özet en geç 1 saat içinde silinir.
+            saklanmaz; özet en geç 1 gün içinde silinir.
           </li>
         </ul>
         <p>
@@ -53,12 +54,35 @@ export default function PrivacyPage() {
             Cihaz kimliğinin özeti: tarayıcı rastgele bir kimlik üretip bu cihazda saklar; sunucuda
             yalnızca oyuna bağlı özeti tutulur. Her cihazın bir kez oynaması bununla sağlanır.
           </li>
-          <li>Kötüye kullanımı sınırlamak için IP adresinin tuzlanmış özeti (en geç 1 saatte silinir)</li>
+          <li>Kötüye kullanımı sınırlamak için IP adresinin tuzlanmış özeti (en geç 1 günde silinir)</li>
         </ul>
         <p>
           Bunlar oyunun süresi boyunca tutulur ve oyunla birlikte silinir. Oyunu kuran kişi bir
           oyuncuyu sıralamadan kaldırabilir; o zaman o tahmin hemen silinir. Fotoğraflar oyuncuya
           yalnızca tahminini gönderdikten sonra, 10 dakika geçerli adreslerle gösterilir.
+        </p>
+      </Section>
+
+      <Section title="Canlı odada ne işleniyor?">
+        <ul className="list-disc pl-5">
+          <li>Odayı kuranın ve katılanların yazdığı ad ile kendi yüklediği fotoğraf (400×400 JPEG)</li>
+          <li>Oda ayarları (mod, yazma süresi, küfür-argo izni) ve oyunun hangi aşamada olduğu</li>
+          <li>Oyuncuların yazdığı maddeler, “bu kim” tahminleri ve puanlar</li>
+          <li>
+            Oturum anahtarının özeti: odaya girince tarayıcına rastgele bir anahtar verilir ve bu
+            cihazda saklanır; sunucuda yalnızca özeti tutulur. Sayfa yenilense de aynı yerine bununla dönersin.
+          </li>
+          <li>Son görülme zamanı (kimin bağlı olduğunu göstermek ve adminliği devretmek için)</li>
+          <li>Kötüye kullanımı sınırlamak için IP adresinin tuzlanmış özeti (en geç 1 günde silinir)</li>
+        </ul>
+        <p>
+          Herkes yalnızca kendi fotoğrafını yükler. Odaya katılmamış biri linki açarsa yalnızca odayı
+          kuranın adını ve kaç kişinin katıldığını görür; adlar ve fotoğraflar katılmadan gösterilmez.
+          Kimin hangi maddeyi yazdığı hiçbir oyuncuya, oyun bittikten sonra da gönderilmez.
+        </p>
+        <p>
+          Canlı bağlantı için Supabase Realtime kullanılır; bu kanaldan yalnızca “bir şey değişti”
+          sinyali geçer, ad, fotoğraf ya da madde geçmez.
         </p>
       </Section>
 
@@ -69,6 +93,11 @@ export default function PrivacyPage() {
           kendiliğinden silinir.
           Yedek tutulmaz.
         </p>
+        <p>
+          Canlı oda: oyun bittikten 30 dakika sonra, her durumda oda kurulduktan en geç 2 saat
+          sonra; adlar, fotoğraflar, maddeler ve tahminler birlikte silinir (silme görevi 15
+          dakikada bir çalışır). Lobiden çıkan ya da çıkarılan oyuncunun fotoğrafı hemen silinir.
+        </p>
       </Section>
 
       <Section title="Nasıl silinir?">
@@ -76,6 +105,10 @@ export default function PrivacyPage() {
           Linki oluşturduğun cihazda “Oyun” menüsünden “Oyunlarım”a gir ve “Şimdi sil”e bas. Oyun;
           fotoğrafları, oyuncu adları ve cevaplarıyla birlikte hemen silinir. Silme anahtarı yalnızca o cihazda durur; sunucuda
           yalnızca özeti vardır.
+        </p>
+        <p>
+          Canlı odada admin “Odayı sil”e basınca oda her şeyiyle hemen silinir. Oyun başlamadan
+          “Odadan çık” dersen adın ve fotoğrafın hemen silinir.
         </p>
         <p>
           Pusulada sen varsın ve silinmesini istiyorsan linki paylaşan kişiye ya da aşağıdaki adrese

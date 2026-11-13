@@ -1,5 +1,5 @@
 import { CircleNotch, MagnifyingGlassMinus, MagnifyingGlassPlus } from '@phosphor-icons/react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import Cropper, { type Area } from 'react-easy-crop'
 import { cropToJpeg } from '../lib/image'
 import { savePhoto } from '../lib/photos'
@@ -11,15 +11,47 @@ export function CropModal() {
   const crop = useUiStore((s) => s.crop)
   if (!crop) return null
   // key: yeni dosyada durum sıfırlansın
-  return <CropDialog key={crop.src} cellId={crop.cellId} src={crop.src} />
+  return <CellCropDialog key={crop.src} cellId={crop.cellId} src={crop.src} />
 }
 
-function CropDialog({ cellId, src }: { cellId: string; src: string }) {
+function CellCropDialog({ cellId, src }: { cellId: string; src: string }) {
+  const closeCrop = useUiStore((s) => s.closeCrop)
+  const updateCell = useCompassStore((s) => s.updateCell)
+  return (
+    <PhotoCropDialog
+      src={src}
+      onCancel={closeCrop}
+      onSave={async (blob) => {
+        const photoId = await savePhoto(blob)
+        updateCell(cellId, { photoId })
+        closeCrop()
+      }}
+    />
+  )
+}
+
+/**
+ * Kare kırpma penceresi: kaynağı 400×400 JPEG'e çevirip `onSave`'e verir.
+ * Pusula hücresi ve canlı odadaki oyuncu fotoğrafı bunu kullanır.
+ */
+export function PhotoCropDialog({
+  src,
+  onCancel,
+  onSave,
+}: {
+  src: string
+  onCancel: () => void
+  onSave: (blob: Blob) => Promise<void> | void
+}) {
   useOverlay()
   const titleId = useId()
-  const closeCrop = useUiStore((s) => s.closeCrop)
+  // Ref: çağıran her çizimde yeni fonksiyon verse de odak ve klavye dinleyicisi bir kez kurulur.
+  const cancelRef = useRef(onCancel)
+  useLayoutEffect(() => {
+    cancelRef.current = onCancel
+  })
+  const closeCrop = useCallback(() => cancelRef.current(), [])
   const showToast = useUiStore((s) => s.showToast)
-  const updateCell = useCompassStore((s) => s.updateCell)
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [zoom, setZoom] = useState(1)
   const [area, setArea] = useState<Area | null>(null)
@@ -47,9 +79,7 @@ function CropDialog({ cellId, src }: { cellId: string; src: string }) {
     setSaving(true)
     try {
       const blob = await cropToJpeg(src, area)
-      const photoId = await savePhoto(blob)
-      updateCell(cellId, { photoId })
-      closeCrop()
+      await onSave(blob)
     } catch {
       showToast('Foto kaydedilemedi. Başka bir görsel dene.', 'error')
       setSaving(false)

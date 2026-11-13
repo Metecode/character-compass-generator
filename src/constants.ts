@@ -82,3 +82,21 @@ export const BLUR_MAX_BYTES = 5 * 1024
 export const DEVICE_STORAGE_KEY = 'compass-device'
 /** Sıralamada önce gösterilen satır sayısı. */
 export const RANKING_PREVIEW = 20
+
+// --- Canlı oda (sunucu limitleri: supabase/functions/_shared/limits.ts) ---
+export const ROOM_MAX_PLAYERS = 16
+/** Başlatmak için gereken en az oyuncu: Klasik 4, Hızlı 3. */
+export const ROOM_MIN_PLAYERS = { classic: 4, quick: 3 } as const
+/** Yazma süresi seçenekleri (saniye). */
+export const ROOM_WRITE_SECONDS = [120, 180, 300] as const
+export const ROOM_DEFAULT_WRITE_SECONDS = 180
+/** Bu cihazın oda oturumları (oturum anahtarı burada durur). */
+export const ROOMS_STORAGE_KEY = 'compass-rooms'
+/** Soket bağlıyken nabız: sunucu çevrimiçi bilgisini ve kaçan sinyalleri bununla yakalar. */
+export const ROOM_HEARTBEAT_MS = 60_000
+/** Soket kopukken yoklama aralığı. */
+export const ROOM_POLL_MS = 5_000
+/** Sinyal sonrası en fazla bu kadar rastgele bekleme (16 kişi aynı anda istemesin). */
+export const ROOM_SIGNAL_JITTER_MS = 300
+/** İki durum isteği arasında en az bu kadar süre. */
+export const ROOM_MIN_FETCH_GAP_MS = 1_000

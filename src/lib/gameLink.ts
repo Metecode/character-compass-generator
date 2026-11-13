@@ -61,3 +61,13 @@ export function rateLimitMessage(retryAfter: number | null): string {
     ? `Bu ağdan çok fazla oyun oluşturuldu. Yaklaşık ${retryWaitText(retryAfter)} sonra tekrar dene.`
     : 'Bu ağdan çok fazla oyun oluşturuldu. Biraz sonra tekrar dene.'
 }
+
+// ---------------------------------------------------------------------------
+// Canlı oda
+// ---------------------------------------------------------------------------
+
+export const roomUrl = (code: string): string => `${window.location.origin}/r/${code}`
+
+/** "{Ad} seni canlı pusula oyununa çağırıyor 👉 link" (paylaşımda link yalnızca `url` alanında). */
+export const roomInviteMessage = (creatorName: string, url: string): ShareMessage =>
+  withLink(`${creatorName.trim()} seni canlı pusula oyununa çağırıyor`, url)

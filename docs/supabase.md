@@ -12,9 +12,10 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 | Şema, yetkiler, kova | `supabase/migrations/20261113000100_games_schema.sql` | RLS açık, policy yok; yalnızca `service_role`'a GRANT |
 | Tahmin oyunu (Aşama 3) | `supabase/migrations/20261114000100_guess_game.sql` | `guesses`, `guess_hints` (oyunla cascade silinir), `game_photos.blur_path`, `submit_guess()` |
 | Çözme süresi | `supabase/migrations/20261115000100_solve_time.sql` | `guess_starts` (cascade), `guesses.duration_seconds`, `start_guess()`; `submit_guess()` süreyi yazar |
+| Canlı oda (Aşama 4) | `supabase/migrations/20261117000100_live_rooms.sql` | `rooms`, `room_players`, `room_items`, `room_guesses` (odaya cascade); `room_join()`, `room_remove_player()`, `room_handover_admin()`; private `room-photos` kovası |
 | Zamanlama | `supabase/migrations/20261113000200_schedules.sql` | pg_cron + pg_net; cleanup sırrı Vault'ta, DB içinde üretilir |
-| Fonksiyonlar | `supabase/functions/{create-game,delete-game,cleanup,health,get-game,start-game,use-hint,submit-guess,game-stats}` | Hepsi `verify_jwt = false`; yetki kontrolü fonksiyon içinde |
-| Ortak kod | `supabase/functions/_shared/` | `validate.ts`, `play.ts`, `jpeg.ts`, `tokens.ts`, `http.ts`, `ip.ts` saf TS → vitest; `game.ts`, `supabase.ts` Edge ortamı |
+| Fonksiyonlar | `supabase/functions/{create-game,delete-game,cleanup,health,get-game,start-game,use-hint,submit-guess,game-stats,create-room,join-room,get-room-state,room-action,room-admin}` | Hepsi `verify_jwt = false`; yetki kontrolü fonksiyon içinde |
+| Ortak kod | `supabase/functions/_shared/` | `validate.ts`, `play.ts`, `room.ts`, `jpeg.ts`, `tokens.ts`, `http.ts`, `ip.ts` saf TS → vitest; `game.ts`, `roomDb.ts`, `supabase.ts` Edge ortamı |
 | Uyanık tutma | `.github/workflows/keepalive.yml` | Pzt + Per 06:17 UTC, `health` → 204 |
 
 ### Uç noktalar
@@ -28,6 +29,11 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
 | `use-hint` | Tarayıcı | publishable + `device` | IP başına saatte 120 |
 | `submit-guess` | Tarayıcı | publishable + `device` | IP başına saatte 30; oyun başına 200 tahmin |
 | `game-stats` | Tarayıcı (Oyunlarım → İstatistik) | publishable + `delete_token` | IP başına saatte 60 |
+| `create-room` | Tarayıcı ("Canlı oda kur") | publishable | IP başına saatte 10 ve günde 30; sistemde en fazla 20 aktif oda |
+| `join-room` | Tarayıcı (`/r/{code}`) | publishable | IP başına saatte 60; bitmemiş odalarda toplam 180 oyuncu |
+| `get-room-state` | Tarayıcı (`/r/{code}`) | publishable + `session` (yoksa ziyaretçi görünümü) | oturum başına dakikada 90; oturumsuz IP başına saatte 240 |
+| `room-action` | Tarayıcı | publishable + `session`; `action` beyaz listede | oturum başına saatte 300 |
+| `room-admin` | Tarayıcı (admin) | publishable + `session` = `rooms.admin_player_id`; `action` beyaz listede | oturum başına saatte 300 |
 | `cleanup` | Yalnızca pg_cron (15 dk) | `x-cleanup-secret` (Vault'taki sır, DB'de doğrulanır) | — |
 | `health` | GitHub Actions | yok; veri döndürmez (204) | — |
 
@@ -58,6 +64,60 @@ Aşama 2'nin sunucu tarafı. Mimari özeti `CLAUDE.md`'de; bu dosya işletim ad�
   istemciye dönmez.
 - **Kurucu:** `game-stats` silme anahtarıyla istatistik ve satır kimlikli sıralama döner;
   `remove: <id>` o tahmini ve o cihazın ipuçlarını siler.
+
+### Canlı oda (Aşama 4)
+
+Durum makinesi `lobby → writing → reveal → done`. Sunucu tek doğruluk kaynağıdır; her işlem
+bir Edge Function'dır.
+
+- **Kimlik:** `create-room` / `join-room` 32 baytlık bir oturum anahtarı döner (yalnızca o
+  yanıtta); tarayıcı `compass-rooms` anahtarında saklar, sunucuda `SHA-256('room-session|' + anahtar)`
+  tutulur. Ayrı admin anahtarı yok: admin, oturumu `rooms.admin_player_id` ile eşleşen oyuncudur.
+- **Admin devri:** admin 5 dakikadır durum istemediyse ve oyun bitmediyse, ilk durum isteğinde
+  son 150 sn'de görünen en eski oyuncu admin olur (`room_handover_admin`, oda kilitli). Lobide
+  admin kendisi çıkarsa admin en eski oyuncuya geçer; odada kimse kalmazsa oda silinir.
+- **Ziyaretçi görünümü** (oturumsuz `get-room-state`): yalnızca kurucu adı, oyuncu sayısı,
+  katılınabilir mi ve neden değil (`started` / `full`). Ad, foto, kanal adı dönmez.
+- **Üye görünümü** `_shared/room.ts` → `projectMember`: oyuncu başına `id, name, photo, isAdmin,
+  online`; ayarlar, kanal adı, sunucu saati. Yazarlık (`room_items.author_id`) hiçbir aşamada
+  hiçbir istemciye gitmez.
+- **Foto:** 400×400 JPEG doğrulaması `create-game` ile aynı. `room-photos/{kod}/{uuid}.jpg`;
+  yüklemede oda bitiş süresine kadar geçerli tek imzalı adres üretilir ve `room_players.photo_url`'de
+  saklanır (her istekte yeniden imzalanmaz, tarayıcı önbelleği çalışır). Lobiden çıkan ya da
+  çıkarılan oyuncunun dosyası hemen silinir.
+- **Ad:** oda içinde tekil, `toLocaleLowerCase('tr')` ile (`name_key`); 409 `name_taken`.
+- **Silme:** oda kuruluştan en geç 2 saat sonra (`expires_at`, tablo kısıtıyla), oyun bitince
+  30 dakika sonra (Parça C). `cleanup` süresi dolan odaları dosyalarıyla siler ve `room-photos`'taki
+  yetim klasörleri temizler. Admin `room-admin` → `delete` ile hemen siler.
+
+**Realtime.** Oda başına bir public Broadcast kanalı: `room-{channel_id}` (22 karakter base62,
+oda kodundan ayrı; yalnızca üyenin durum yanıtında döner). Kanal yalnızca içi boş sinyal taşır:
+`changed` (herkes yeniden çeker) ve `admin` (yalnızca admin; tahmin sayısı gibi). Sinyali
+fonksiyonlar REST ile gönderir (`POST /realtime/v1/api/broadcast`, secret anahtar, soket açmadan;
+`_shared/supabase.ts` → `signalRoom`); gönderilemezse işlem yine başarılıdır. İstemci
+(`src/lib/roomRealtime.ts`, yalnızca `/r/` parçasında `@supabase/realtime-js`) sinyal gelince
+0–300 ms rastgele bekleyip `get-room-state` çağırır; peş peşe sinyaller tek isteğe iner, iki istek
+arasında en az 1 sn (`src/lib/roomSync.ts`). Soket bağlıyken 60 sn'de bir nabız, kopukken 5 sn'de
+bir yoklama; bağlanınca hemen çeker. "Bağlı" = kanal katılımı tamam ve tarayıcı çevrimiçi
+(çevrim dışı olunca açık soket hemen kapanmayabilir). Yalnızca katılmış oyuncu soket açar
+(oda başına ≤ 16). Private kanal kullanılmadı: Auth kullanıcısı ve projede "Allow public access"ı
+kapatmayı gerektirir. Sonuç: konu adını bilen biri (atılmış oyuncu) sahte sinyal gönderip yeniden
+çekme tetikleyebilir; veri sızmaz, istemcideki 1 sn sınırı ve oturum limiti etkisini sınırlar.
+
+**Çağrı kotası.** Ücretsiz plan: ayda 500.000 Edge Function çağrısı (aşımda ücret yok, hizmet
+kısıtlanır); Realtime 200 eşzamanlı bağlantı, saniyede 100 mesaj. Ölçüm (13 Kasım 2026,
+`scripts/room-load.mjs`, 16 oyuncu): boşta lobide oyuncu başına dakikada 1,0 çağrı (nabız);
+bir sinyal 16–17 durum isteği; 16 kişinin katılması toplam ~150 durum isteği. Tahmin, 16 kişilik
+tam oyun (5 dk lobi, 3 dk yazma, 16 hücre açılış ~15 dk):
+
+| Aşama | Hesap | Çağrı |
+|---|---|---|
+| Lobi | 16 katılma + ~150 durum + 5 dk × 16 nabız | ~250 |
+| Yazma (B) | başlat 16 + 16 "hazırım" × 16 + taslak kaydı ~160 + 3 dk × 16 nabız + geçiş 16 | ~500 |
+| Açılış (C) | 16 hücre × (2 admin adımı × 16 + 16 tahmin + 16 admin çekişi) + 15 dk × 16 nabız | ~1.300 |
+| Toplam | | **~2.000–2.500** |
+
+Ayda ~200 tam dolu oyun (tahmin oyunu kullanımı hariç). Nabız payı küçük (~%15); aralık 60 sn kaldı.
 
 ### Fonksiyon ortam değişkenleri
 
@@ -224,9 +284,48 @@ Betikler `fetch` ile uç noktaları çağırır (publishable anahtar, rastgele c
   Hepsi 0 olmalı.
 - **e)** İmzalı adres hemen 200, 10 dakika sonra 400 (`exp` = `iat` + 600).
 
+### Aşama 4 doğrulaması (canlı)
+
+Betikler `.env.local`'daki publishable anahtarla canlı fonksiyonları çağırır; anahtar ekrana basılmaz.
+
+- **API ve güvenlik** (`pnpm room:check`, `scripts/room-api-check.mjs`): publishable anahtarla
+  4 oda tablosu 401, oda SQL fonksiyonları 404, `room-photos` listesi boş; kanalı dinleyen
+  bağımsız bir istemci yalnızca `{}` payload'lı `changed` sinyalleri alır; ziyaretçi yanıtında
+  yalnızca izinli 7 alan; üye yanıtında oturum, yazar, dosya yolu yok; aynı ad (TR büyük harf)
+  409; yetkisiz kick 403; beyaz liste dışı eylem 400; admin çıkınca en eski oyuncu admin; silme 404;
+  son oyuncu çıkınca oda silinir.
+- **Çok sekmeli deneme** (`pnpm dev` + `pnpm room:e2e`, `scripts/room-e2e.mjs`, sistem Chrome'u):
+  admin editörden odayı kurar (masaüstü), 3 oyuncu 390 px'te katılır, admin listeyi sinyalle
+  görür; ziyaretçi ad/foto görmez; bir oyuncu çevrim dışı olur ("Bağlantı yeniden kuruluyor"),
+  o sırada admin birini çıkarır, bağlantı dönünce liste kendiliğinden düzelir; sayfa yenilenince
+  oyuncu aynı yerine döner; admin siler, diğerleri "Bu oda artık yok" görür. `SHOTS=klasör`
+  ekran görüntüsü alır.
+- **Çağrı ölçümü** (`MINUTES=3 node scripts/room-load.mjs`): 16 oyunculu lobi, yukarıdaki tablo.
+- **Admin devri:** SQL Editor'de adminin `last_seen_at`'ı 6 dk geri çekilir; başka bir oyuncunun
+  ilk durum isteğinde en eski çevrimiçi oyuncu admin olur, eski admin dönünce normal oyuncudur.
+- **Süre dolunca silme:**
+  ```sql
+  update public.rooms set created_at = now() - interval '2 hours', expires_at = now() - interval '1 minute'
+  where code = 'KOD';
+  ```
+  (Kısıt: `expires_at` en fazla `created_at + 2 sa 5 dk`.) Hemen 404; en geç 15 dk sonra:
+  ```sql
+  select (select count(*) from public.rooms where code = 'KOD') as oda,
+         (select count(*) from public.room_players where room_code = 'KOD') as oyuncu,
+         (select count(*) from storage.objects where bucket_id = 'room-photos' and name like 'KOD/%') as dosya;
+  ```
+- **Testten sonra `rate_limits` temizliği** (oda işlemleri):
+  ```sh
+  npx supabase db query --remote --yes "delete from public.rate_limits where key like '%:create-room' or key like '%:create-room-day' or key like '%:join-room' or key like '%:room-preview' or key like '%:room-state' or key like '%:room-action' or key like '%:room-admin';"
+  ```
+
 ## Bilinen sınırlar
 
-- `cleanup` her turda en fazla 50 süresi dolmuş oyun siler; kalanlar sonraki turda.
+- `cleanup` her turda en fazla 50 süresi dolmuş oyun ve 50 oda siler; kalanlar sonraki turda.
+  Oda, süresi dolduktan sonra en geç ~15 dk daha diskte durur (istemcilere hemen 404).
+- Canlı oda kanalı public'tir; konu adını bilen biri sahte boş sinyal gönderebilir (veri sızmaz).
+- iOS Safari arka plana geçince soket kapanır; dönünce görünürlük olayıyla hemen yeniden çekilir.
+  Gerçek cihazda denenmeli.
 - Tahmin oyununda cihaz kimliği tarayıcı deposundadır: gizli sekme ya da temizlenmiş tarayıcı
   yeni kimlik üretir ve yeniden oynayabilir (hesap olmadığı için kabul edildi).
 - Kurucu bir oyuncuyu sıralamadan kaldırırsa o cihaz yeniden oynayabilir.

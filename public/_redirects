@@ -1,3 +1,4 @@
-# Oyun linkleri: ayrı önizleme etiketli giriş (g.html). Genel kuraldan önce gelmeli.
+# Oyun ve oda linkleri: ayrı önizleme etiketli girişler (g.html, r.html). Genel kuraldan önce gelmeli.
 /g/*  /g.html  200
+/r/*  /r.html  200
 /*    /index.html   200

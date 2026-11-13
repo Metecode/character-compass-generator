@@ -4,6 +4,7 @@ import {
   GameController,
   LinkSimple,
   ListBullets,
+  UsersThree,
   Palette,
   Swatches,
   ArrowCounterClockwise,
@@ -15,7 +16,7 @@ import { ActionMenu } from './ActionMenu'
 import { preloadQuadrants, preloadTheme } from './lazyDialogs'
 
 /**
- * "Oyun" menüsü: "Oyun linki oluştur" ve "Oyunlarım". Mobilde alt sayfa,
+ * "Oyun" menüsü: "Oyun linki oluştur", "Canlı oda kur" ve "Oyunlarım". Mobilde alt sayfa,
  * masaüstünde açılır menü. Ağ isteği atmaz; yalnızca pencereleri açar.
  */
 export function GameMenu({ variant = 'toolbar' }: { variant?: 'toolbar' | 'bar' }) {
@@ -34,6 +35,13 @@ export function GameMenu({ variant = 'toolbar' }: { variant?: 'toolbar' | 'bar' 
           description: gameBlocked ?? undefined,
           inactive: Boolean(gameBlocked),
           onSelect: () => (gameBlocked ? showToast(gameBlocked) : setGameDialog('create')),
+        },
+        {
+          id: 'room',
+          label: 'Canlı oda kur',
+          description: 'Arkadaşlarınla aynı anda oyna',
+          icon: <UsersThree size={20} weight="bold" />,
+          onSelect: () => setGameDialog('room'),
         },
         {
           id: 'mine',
