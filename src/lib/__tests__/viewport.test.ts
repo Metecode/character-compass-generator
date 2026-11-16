@@ -5,6 +5,7 @@ import {
   defaultSheetHeight,
   panelTitle,
   revealDelta,
+  roomFrameBox,
   sheetFrame,
 } from '../viewport'
 
@@ -88,5 +89,31 @@ describe('panelTitle', () => {
     expect(panelTitle('')).toBe('Yeni kişi')
     expect(panelTitle('   ')).toBe('Yeni kişi')
     expect(panelTitle(undefined)).toBe('Yeni kişi')
+  })
+})
+
+describe('roomFrameBox (canlı oda çerçevesi)', () => {
+  it('visualViewport yoksa sayfayı doldurur', () => {
+    expect(roomFrameBox(H, null)).toEqual({ top: 0, height: null, keyboard: false })
+  })
+
+  it('adres çubuğu oynaması klavye sayılmaz', () => {
+    expect(roomFrameBox(H, { height: H - KEYBOARD_THRESHOLD, offsetTop: 0, scale: 1 })).toEqual({
+      top: 0,
+      height: null,
+      keyboard: false,
+    })
+  })
+
+  it('klavye açıkken görünür alana oturur (iOS kaydırmasıyla)', () => {
+    expect(roomFrameBox(H, { height: 516.4, offsetTop: 120.6, scale: 1 })).toEqual({
+      top: 121,
+      height: 516,
+      keyboard: true,
+    })
+  })
+
+  it('yakınlaştırılmışsa dokunmaz', () => {
+    expect(roomFrameBox(H, { height: 400, offsetTop: 50, scale: 2 }).keyboard).toBe(false)
   })
 })

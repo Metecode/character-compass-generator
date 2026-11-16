@@ -34,6 +34,8 @@ function Room({ code }: { code: string }) {
   const { screen } = room
 
   let body
+  /** Üye aşamaları kendi çerçevesini (RoomFrame) kurar. */
+  let framed = false
   if (deleted) body = <ClosedCard reason="deleted" />
   else if (screen.kind === 'loading') {
     body = (
@@ -62,6 +64,7 @@ function Room({ code }: { code: string }) {
       <ClosedCard reason={d.closedReason === 'full' ? 'full' : 'started'} />
     )
   } else if (screen.data.phase === 'lobby') {
+    framed = true
     body = (
       <LobbyView
         data={screen.data}
@@ -78,6 +81,7 @@ function Room({ code }: { code: string }) {
       />
     )
   } else if (screen.data.phase === 'writing' && screen.data.writing) {
+    framed = true
     body = (
       <WritingView
         key={`${screen.session.code}:${screen.session.playerId}`}
@@ -92,6 +96,7 @@ function Room({ code }: { code: string }) {
       />
     )
   } else if (screen.data.phase === 'reveal' && screen.data.reveal) {
+    framed = true
     body = (
       <RevealView
         data={screen.data}
@@ -104,6 +109,7 @@ function Room({ code }: { code: string }) {
       />
     )
   } else if (screen.data.phase === 'done' && screen.data.result) {
+    framed = true
     body = (
       <RoomResultView
         data={screen.data}
@@ -125,6 +131,15 @@ function Room({ code }: { code: string }) {
     )
   }
 
+  if (framed) {
+    return (
+      <>
+        <ConnectionBadge visible={room.reconnecting} />
+        {body}
+        <ToastHost />
+      </>
+    )
+  }
   return (
     <PageShell title="Canlı oda" noindex>
       <ConnectionBadge visible={room.reconnecting} />

@@ -8,6 +8,7 @@ import { deletesInText, ranksOf, roomCompass, winnersOf } from '../../lib/roomRe
 import { useUiStore } from '../../store/uiStore'
 import { Modal } from '../Modal'
 import { RoomBoard, RoomBoardArt } from './RoomBoard'
+import { RoomFrame } from './RoomFrame'
 
 type Confirm = 'import' | 'delete'
 
@@ -42,6 +43,9 @@ async function waitForImages(node: HTMLElement, expected: number, timeoutMs = 80
  * BITTI: kazanan, tam skor tablosu, dolu pusula. Herkes PNG indirebilir ve pusulayı
  * kendi düzenleyicisine aktarabilir; admin odayı hemen silebilir. Oda kendiliğinden
  * ROOM_DONE_TTL_SECONDS sonra silinir.
+ *
+ * Kayabilen tek oda ekranı; yine de kazanan, pusula ve düğmeler ilk ekrana sığar
+ * (pusula ekran yüksekliğine göre küçülür), skor tablosu altta.
  */
 export function RoomResultView({
   data,
@@ -131,80 +135,98 @@ export function RoomResultView({
 
   const winnerNames = winners.ids.map((id) => (id === data.me.id ? 'Sen' : (players.get(id)?.name ?? 'Oyuncu')))
 
+  const scoreTable = data.guessing && (
+    <section aria-labelledby="scores-title" className="rounded-2xl border-[3px] border-ink bg-surface p-4 shadow-brutal">
+      <h2 id="scores-title" className="text-lg font-black tracking-tight">
+        Skor tablosu
+      </h2>
+      <ol className="mt-2 flex flex-col gap-1.5">
+        {res.scores.map((s, i) => {
+          const p = players.get(s.playerId)
+          const me = s.playerId === data.me.id
+          return (
+            <li
+              key={s.playerId}
+              className={`flex items-center gap-2 rounded-xl border-2 border-ink p-1.5 ${me ? 'bg-accent' : 'bg-paper'}`}
+            >
+              <span className="w-7 text-center font-black tabular-nums">{ranks[i]}.</span>
+              {p && <img src={p.photo} alt="" className="size-9 rounded-full border-2 border-ink object-cover" />}
+              <span className="min-w-0 flex-1 truncate font-bold">
+                {p?.name ?? 'Oyuncu'}
+                {me && <span className="text-muted"> (sen)</span>}
+              </span>
+              {ranks[i] === 1 && s.score > 0 && <Crown size={18} weight="fill" aria-label="Birinci" />}
+              <span className="pr-2 text-lg font-black tabular-nums">{s.score}</span>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
+  )
+
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-4">
-      {data.guessing ? (
-        <>
-          <section className="rounded-2xl border-[3px] border-ink bg-accent p-5 text-center shadow-brutal-lg motion-safe:animate-pop-in">
-            <Trophy size={44} weight="fill" className="mx-auto" aria-hidden />
-            <p className="mt-1 text-sm font-black tracking-wide uppercase">Oyun bitti</p>
-            <h1 className="mt-1 text-3xl leading-tight font-black tracking-tight text-balance">
-              {winners.ids.length === 0
-                ? 'Bu sefer kimse bilemedi!'
-                : winners.ids.length === 1
-                  ? `Kazanan: ${winnerNames[0]}`
-                  : `Kazananlar: ${winnerNames.join(', ')}`}
-            </h1>
-            {winners.score > 0 && <p className="mt-1 text-lg font-bold">{winners.score} puan</p>}
+    <RoomFrame title="Sonuç" scroll>
+      <div className="flex flex-col gap-3">
+        {data.guessing ? (
+          <section
+            data-room-winner
+            className="flex items-center gap-3 rounded-2xl border-[3px] border-ink bg-accent p-3 shadow-brutal-lg motion-safe:animate-pop-in"
+          >
+            <Trophy size={40} weight="fill" className="shrink-0" aria-hidden />
+            <div className="min-w-0">
+              <p className="text-xs font-black tracking-wide uppercase">Oyun bitti</p>
+              <h1 className="text-2xl leading-tight font-black tracking-tight text-balance">
+                {winners.ids.length === 0
+                  ? 'Bu sefer kimse bilemedi!'
+                  : winners.ids.length === 1
+                    ? `Kazanan: ${winnerNames[0]}`
+                    : `Kazananlar: ${winnerNames.join(', ')}`}
+              </h1>
+              {winners.score > 0 && <p className="text-[15px] font-bold">{winners.score} puan</p>}
+            </div>
           </section>
-
-          <section aria-labelledby="scores-title" className="rounded-2xl border-[3px] border-ink bg-surface p-4 shadow-brutal">
-            <h2 id="scores-title" className="text-lg font-black tracking-tight">
-              Skor tablosu
-            </h2>
-            <ol className="mt-2 flex flex-col gap-1.5">
-              {res.scores.map((s, i) => {
-                const p = players.get(s.playerId)
-                const me = s.playerId === data.me.id
-                return (
-                  <li
-                    key={s.playerId}
-                    className={`flex items-center gap-2 rounded-xl border-2 border-ink p-1.5 ${me ? 'bg-accent' : 'bg-paper'}`}
-                  >
-                    <span className="w-7 text-center font-black tabular-nums">{ranks[i]}.</span>
-                    {p && <img src={p.photo} alt="" className="size-9 rounded-full border-2 border-ink object-cover" />}
-                    <span className="min-w-0 flex-1 truncate font-bold">
-                      {p?.name ?? 'Oyuncu'}
-                      {me && <span className="text-muted"> (sen)</span>}
-                    </span>
-                    {ranks[i] === 1 && s.score > 0 && <Crown size={18} weight="fill" aria-label="Birinci" />}
-                    <span className="pr-2 text-lg font-black tabular-nums">{s.score}</span>
-                  </li>
-                )
-              })}
-            </ol>
-          </section>
-        </>
-      ) : (
-        <h1 className="text-2xl font-black tracking-tight">Oyun bitti</h1>
-      )}
-
-      <RoomBoard gridSize={res.gridSize} cells={res.cells} players={players} maxWidth={560} />
-
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn btn-primary" onClick={downloadPng} disabled={busy !== null} aria-busy={busy === 'png'}>
-          {busy === 'png' ? (
-            <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
-          ) : (
-            <DownloadSimple size={20} weight="bold" aria-hidden />
-          )}
-          PNG indir
-        </button>
-        <button type="button" className="btn" onClick={() => setConfirm('import')} disabled={busy !== null}>
-          <PencilSimpleLine size={20} weight="bold" aria-hidden />
-          Düzenleyiciye aktar
-        </button>
-        {data.me.isAdmin && (
-          <button type="button" className="btn btn-danger ml-auto" onClick={() => setConfirm('delete')} disabled={busy !== null}>
-            <Trash size={20} weight="bold" aria-hidden />
-            Odayı şimdi sil
-          </button>
+        ) : (
+          <h1 data-room-winner className="text-2xl font-black tracking-tight">
+            Oyun bitti
+          </h1>
         )}
+
+        <div data-room-board>
+          <RoomBoard
+            gridSize={res.gridSize}
+            cells={res.cells}
+            players={players}
+            maxSize={`min(560px, max(240px, calc(100dvh - ${data.guessing ? 300 : 240}px)))`}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2" data-room-buttons>
+          <button type="button" className="btn btn-primary" onClick={downloadPng} disabled={busy !== null} aria-busy={busy === 'png'}>
+            {busy === 'png' ? (
+              <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
+            ) : (
+              <DownloadSimple size={20} weight="bold" aria-hidden />
+            )}
+            PNG indir
+          </button>
+          <button type="button" className="btn" onClick={() => setConfirm('import')} disabled={busy !== null}>
+            <PencilSimpleLine size={20} weight="bold" aria-hidden />
+            Düzenleyiciye aktar
+          </button>
+          {data.me.isAdmin && (
+            <button type="button" className="btn btn-danger ml-auto" onClick={() => setConfirm('delete')} disabled={busy !== null}>
+              <Trash size={20} weight="bold" aria-hidden />
+              Odayı şimdi sil
+            </button>
+          )}
+        </div>
+        <p className="text-sm text-muted">
+          {deletesInText(res.deletesAt - now)} Fotoğraflar, adlar ve maddeler sunucudan tamamen kalkar; indirdiğin PNG
+          ve düzenleyiciye aktardığın pusula yalnızca bu cihazda kalır.
+        </p>
+
+        {scoreTable}
       </div>
-      <p className="text-sm text-muted">
-        {deletesInText(res.deletesAt - now)} Fotoğraflar, adlar ve maddeler sunucudan tamamen kalkar; indirdiğin PNG
-        ve düzenleyiciye aktardığın pusula yalnızca bu cihazda kalır.
-      </p>
 
       {confirm && (
         <Modal
@@ -250,6 +272,6 @@ export function RoomResultView({
           </div>,
           document.body,
         )}
-    </div>
+    </RoomFrame>
   )
 }

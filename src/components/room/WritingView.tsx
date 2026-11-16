@@ -28,10 +28,13 @@ import {
   type WritingState,
 } from '../../lib/roomApi'
 import { useUiStore } from '../../store/uiStore'
+import type { MenuItem } from '../ActionMenu'
 import { CharCounter } from '../CharCounter'
 import { Modal } from '../Modal'
+import { useFrameBox } from '../../hooks/useFrameBox'
 import { useServerNow } from '../../hooks/useServerNow'
 import { Countdown } from './Countdown'
+import { RoomFrame } from './RoomFrame'
 
 /** Bu hatalardan sonra taslak kaydı durur; ekran sunucudan yeniden çekilir. */
 const FATAL = new Set(['not_writing', 'time_up', 'not_found', 'not_member'])
@@ -58,6 +61,7 @@ const toDrafts = (texts: Texts): ItemDraft[] =>
  * YAZMA: hedefin adı ve fotoğrafı büyük; Klasik'te 3 hedef arasında "1/3" ile geçiş,
  * Hızlı'da tek hedefe 3 madde. Taslak 1,5 sn duraklamada, odak kaybında ve süre
  * sonunda kaydedilir (sinyalsiz). "Hazırım"dan sonra süre bitene kadar düzenlemeye dönülebilir.
+ * Geri sayım üstte, "Hazırım" altta sabit; klavye açıkken hedef fotoğrafı küçülür.
  */
 export function WritingView({
   data,
@@ -93,6 +97,12 @@ export function WritingView({
   const timeUp = now >= writing.endsAt
   const classic = data.settings.mode === 'classic'
   const assignments = writing.assignments
+  const { keyboard } = useFrameBox()
+  // Klavye açılınca/kapanınca çerçeve küçülür: odaktaki alan görünür kalsın.
+  useEffect(() => {
+    const el = document.activeElement
+    if (el instanceof HTMLInputElement) requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest' }))
+  }, [keyboard])
 
   // Taslak kaydedici: oturum boyunca bir tane; sayfa gizlenince/kapanınca bekleyen gönderilir.
   useEffect(() => {
@@ -207,6 +217,7 @@ export function WritingView({
   const readyLabel = `${writing.readyCount}/${writing.total} hazır`
 
   let body
+  let footer = null
   if (timeUp) {
     body = (
       <section className="rounded-2xl border-[3px] border-ink bg-surface p-6 text-center shadow-brutal-lg" role="status">
@@ -217,13 +228,13 @@ export function WritingView({
     )
   } else if (writing.meReady) {
     body = (
-      <section className="rounded-2xl border-[3px] border-ink bg-surface p-5 shadow-brutal-lg">
-        <div className="text-center">
-          <CheckCircle size={44} weight="fill" className="mx-auto" aria-hidden />
-          <h1 className="mt-2 text-2xl font-black tracking-tight">Hazırsın</h1>
-          <p className="mt-1 text-[15px]">Diğerleri bekleniyor · {readyLabel}</p>
+      <section className="flex min-h-0 flex-1 flex-col rounded-2xl border-[3px] border-ink bg-surface p-4 shadow-brutal-lg">
+        <div className="shrink-0 text-center">
+          <CheckCircle size={40} weight="fill" className="mx-auto" aria-hidden />
+          <h1 className="mt-1 text-2xl font-black tracking-tight">Hazırsın</h1>
+          <p className="mt-0.5 text-[15px]">Diğerleri bekleniyor · {readyLabel}</p>
         </div>
-        <ul className="mt-4 flex flex-col gap-2">
+        <ul data-room-scroll="mine" className="mt-3 flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain">
           {assignments.map((a) => {
             const p = players.get(a.targetId)
             return (
@@ -245,25 +256,27 @@ export function WritingView({
             )
           })}
         </ul>
-        <button type="button" className="btn mt-4 w-full" onClick={() => setReady(false)} disabled={busy}>
-          {busy ? (
-            <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
-          ) : (
-            <PencilSimple size={20} weight="bold" aria-hidden />
-          )}
-          Maddelerimi düzenle
-        </button>
       </section>
+    )
+    footer = (
+      <button type="button" className="btn min-h-12 w-full text-base" onClick={() => setReady(false)} disabled={busy}>
+        {busy ? (
+          <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
+        ) : (
+          <PencilSimple size={20} weight="bold" aria-hidden />
+        )}
+        Maddelerimi düzenle
+      </button>
     )
   } else {
     const current = classic ? assignments.slice(page, page + 1) : assignments
     body = (
-      <>
         <section
-          className="rounded-2xl border-[3px] border-ink bg-surface p-4 shadow-brutal-lg"
+          data-room-scroll="writing"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain rounded-2xl border-[3px] border-ink bg-surface p-3 shadow-brutal-lg sm:p-4"
           aria-labelledby="target-name"
         >
-          <div className="flex min-h-11 items-center justify-between gap-2">
+          <div className={`flex min-h-11 shrink-0 items-center justify-between gap-2 ${keyboard ? 'hidden' : ''}`}>
             <p className="text-sm font-black tracking-wide text-muted uppercase">
               {classic ? (
                 <>
@@ -273,27 +286,8 @@ export function WritingView({
                 'Kime yazıyorsun'
               )}
             </p>
-            {classic && assignments.length > 1 && (
-              <div className="flex gap-1.5">
-                <button
-                  type="button"
-                  className="btn btn-icon"
-                  aria-label="Önceki kişi"
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  disabled={page === 0}
-                >
-                  <CaretLeft size={20} weight="bold" aria-hidden />
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-icon"
-                  aria-label="Sonraki kişi"
-                  onClick={() => setPage((p) => Math.min(assignments.length - 1, p + 1))}
-                  disabled={page === assignments.length - 1}
-                >
-                  <CaretRight size={20} weight="bold" aria-hidden />
-                </button>
-              </div>
+            {classic && assignments.length > 1 && !keyboard && (
+              <PageNav page={page} count={assignments.length} onPage={setPage} />
             )}
           </div>
           {current.map((a) => (
@@ -304,6 +298,12 @@ export function WritingView({
               texts={texts}
               flagged={flagged}
               targetId={a.targetId}
+              compact={keyboard}
+              nav={
+                classic && assignments.length > 1 ? (
+                  <PageNav page={page} count={assignments.length} onPage={setPage} />
+                ) : null
+              }
               onChange={change}
               onRoll={roll}
               onBlur={() => void saverRef.current?.flush()}
@@ -312,8 +312,8 @@ export function WritingView({
               }}
             />
           ))}
-          {classic && assignments.length > 1 && (
-            <div className="mt-4 flex justify-center gap-2" role="group" aria-label="Kişiler">
+          {classic && assignments.length > 1 && !keyboard && (
+            <div className="mt-auto flex shrink-0 justify-center gap-2 pt-3" role="group" aria-label="Kişiler">
               {assignments.map((a, i) => {
                 const p = players.get(a.targetId)
                 const filled = (texts[draftKey(a.targetId, 0)] ?? '').trim() !== ''
@@ -336,46 +336,56 @@ export function WritingView({
             </div>
           )}
         </section>
-
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            className="btn btn-primary min-h-12 w-full text-base"
-            onClick={() => (emptyCount > 0 ? setConfirm('ready-empty') : setReady(true))}
-            disabled={busy}
-          >
-            {busy ? (
-              <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
-            ) : (
-              <CheckCircle size={20} weight="fill" aria-hidden />
-            )}
-            Hazırım
-          </button>
-          <SaveStatusLine status={status} />
-        </div>
-      </>
+    )
+    footer = (
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          className="btn btn-primary min-h-12 w-full text-base"
+          onClick={() => (emptyCount > 0 ? setConfirm('ready-empty') : setReady(true))}
+          disabled={busy}
+        >
+          {busy ? (
+            <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
+          ) : (
+            <CheckCircle size={20} weight="fill" aria-hidden />
+          )}
+          Hazırım
+        </button>
+        <SaveStatusLine status={status} />
+      </div>
     )
   }
 
-  return (
-    <div className="mx-auto flex max-w-xl flex-col gap-4">
-      <Countdown endsAt={writing.endsAt} now={now} right={readyLabel} />
-      {body}
+  const menu: MenuItem[] = data.me.isAdmin
+    ? [
+        ...(!timeUp
+          ? [
+              {
+                id: 'end',
+                label: 'Yazmayı bitir',
+                description: 'Herkes için yazma süresi biter',
+                icon: <StopCircle size={20} weight="bold" />,
+                onSelect: () => setConfirm('end'),
+              },
+            ]
+          : []),
+        {
+          id: 'delete',
+          label: 'Odayı sil',
+          icon: <Trash size={20} weight="bold" />,
+          danger: true,
+          onSelect: () => setConfirm('delete'),
+        },
+      ]
+    : []
 
-      {data.me.isAdmin && (
-        <div className="flex flex-wrap justify-end gap-2">
-          {!timeUp && (
-            <button type="button" className="btn" onClick={() => setConfirm('end')}>
-              <StopCircle size={20} weight="bold" aria-hidden />
-              Yazmayı bitir
-            </button>
-          )}
-          <button type="button" className="btn btn-danger" onClick={() => setConfirm('delete')}>
-            <Trash size={20} weight="bold" aria-hidden />
-            Odayı sil
-          </button>
-        </div>
-      )}
+  return (
+    <RoomFrame title="Yazma" menu={menu} footer={footer}>
+      <div className="shrink-0">
+        <Countdown endsAt={writing.endsAt} now={now} right={readyLabel} />
+      </div>
+      {body}
 
       {confirm && (
         <Modal
@@ -412,18 +422,20 @@ export function WritingView({
             {confirm === 'ready-empty'
               ? 'Boş maddeler açılışta boş görünür. Süre bitene kadar geri dönüp yazabilirsin.'
               : confirm === 'end'
-                ? `${readyLabel}. Herkesin o ana kadar yazdıkları kaydedilir; boş kalan maddeler boş kalır.`
+                ? `Herkes için yazma süresi biter (${readyLabel}). O ana kadar yazılanlar kaydedilir; boş kalan maddeler boş kalır.`
                 : 'Oda, herkesin fotoğrafı, adı ve maddeleriyle birlikte hemen silinir. Geri alınamaz.'}
           </p>
         </Modal>
       )}
-    </div>
+    </RoomFrame>
   )
 }
 
 function TargetEditor({
   target,
   targetId,
+  compact,
+  nav,
   slots,
   texts,
   flagged,
@@ -434,6 +446,10 @@ function TargetEditor({
 }: {
   target: RoomPlayer | undefined
   targetId: string
+  /** Klavye açık: foto küçük, adın yanında; açıklama gizli. */
+  compact: boolean
+  /** Klavye açıkken adın yanında gösterilen önceki/sonraki düğmeleri. */
+  nav: React.ReactNode
   slots: number
   texts: Record<string, string>
   flagged: ReadonlySet<string>
@@ -445,26 +461,49 @@ function TargetEditor({
   const uid = useId()
   const inputs = useRef<(HTMLInputElement | null)[]>([])
   const name = target?.name ?? 'Oyuncu'
+  // Klavye açıkken kişi değişince yazmaya yeni kişinin ilk alanından devam edilir.
+  const compactAtMount = useRef(compact)
+  useEffect(() => {
+    if (compactAtMount.current) inputs.current[0]?.focus({ preventScroll: true })
+  }, [])
   return (
     <div>
-      <div className="mt-2 flex flex-col items-center text-center">
-        {target && (
-          <img
-            src={target.photo}
-            alt=""
-            width={176}
-            height={176}
-            className="size-36 rounded-2xl border-[3px] border-ink object-cover shadow-brutal sm:size-44"
-          />
-        )}
-        <h1 id="target-name" className="mt-3 max-w-full text-3xl leading-tight font-black tracking-tight wrap-break-word">
-          {name}
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          {slots > 1 ? `${name} için ${slots} madde yaz.` : `${name} için bir madde yaz.`}
-        </p>
-      </div>
-      <ul className="mt-4 flex flex-col gap-3">
+      {compact ? (
+        <div className="mt-1 flex items-center gap-3">
+          {target && (
+            <img
+              src={target.photo}
+              alt=""
+              width={48}
+              height={48}
+              className="size-12 shrink-0 rounded-xl border-2 border-ink object-cover"
+            />
+          )}
+          <h1 id="target-name" className="min-w-0 flex-1 truncate text-2xl leading-tight font-black tracking-tight">
+            {name}
+          </h1>
+          {nav}
+        </div>
+      ) : (
+        <div className="mt-1 flex flex-col items-center text-center">
+          {target && (
+            <img
+              src={target.photo}
+              alt=""
+              width={176}
+              height={176}
+              className="size-[clamp(72px,calc(100dvh-500px),176px)] rounded-2xl border-[3px] border-ink object-cover shadow-brutal"
+            />
+          )}
+          <h1 id="target-name" className="mt-2 max-w-full text-3xl leading-tight font-black tracking-tight wrap-break-word">
+            {name}
+          </h1>
+          <p className="mt-0.5 text-sm text-muted">
+            {slots > 1 ? `${name} için ${slots} madde yaz.` : `${name} için bir madde yaz.`}
+          </p>
+        </div>
+      )}
+      <ul className={`flex flex-col ${compact ? 'mt-2 gap-2' : 'mt-3 gap-3'}`}>
         {Array.from({ length: slots }, (_, slot) => {
           const key = draftKey(targetId, slot)
           const value = texts[key] ?? ''
@@ -525,6 +564,34 @@ function TargetEditor({
           )
         })}
       </ul>
+    </div>
+  )
+}
+
+/** Önceki/sonraki kişi. Klavye açıkken dokunuş odağı alandan almaz (klavye kapanmasın). */
+function PageNav({ page, count, onPage }: { page: number; count: number; onPage: (p: number) => void }) {
+  return (
+    <div className="flex shrink-0 gap-1.5">
+      <button
+        type="button"
+        className="btn btn-icon"
+        aria-label="Önceki kişi"
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={() => onPage(Math.max(0, page - 1))}
+        disabled={page === 0}
+      >
+        <CaretLeft size={20} weight="bold" aria-hidden />
+      </button>
+      <button
+        type="button"
+        className="btn btn-icon"
+        aria-label="Sonraki kişi"
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={() => onPage(Math.min(count - 1, page + 1))}
+        disabled={page === count - 1}
+      >
+        <CaretRight size={20} weight="bold" aria-hidden />
+      </button>
     </div>
   )
 }

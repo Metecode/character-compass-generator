@@ -41,6 +41,10 @@ pnpm + Node 22.20.0 (`.nvmrc`).
   ele verir); gizleme hücre içi rastgele sırayla (`room_items.ord`). Sonuç pusulası ve PNG
   `src/components/room/RoomBoard.tsx`, düzenleyiciye aktarma `src/lib/roomResult.ts` + `loadCompass`.
   Artık kullanılmayan localStorage anahtarları açılışta `src/lib/legacyStorage.ts` ile silinir.
+  Oda ekranları ortak `src/components/room/RoomFrame.tsx` çerçevesinde: lobi, yazma ve açılış
+  telefonda tek ekran (100dvh; kayan yer yalnızca iç listeler), BITTI kayar; klavye açıkken
+  çerçeve visualViewport'a oturur (`roomFrameBox`). Kısa ekran için `short:` varyantı (`index.css`).
+  Yerleşim ölçümü sahte veriyle, sunucusuz: `pnpm build && pnpm room:layout` → `.shots/room-layout/rapor.md`.
 - `/g/*` linkleri `g.html` girişinden açılır (aynı `src/main.tsx`, yalnızca og/twitter etiketleri
   farklı; `public/_redirects`'te genel kuraldan önce). Önizleme görseli `public/og-game.png`,
   kaynağı `scripts/og-game.html` → `pnpm og:game`. `/r/*` aynı şekilde: `r.html`, `public/og-room.png` (`pnpm og:room`). `index.html`'in etiketleri ana sayfanındır.

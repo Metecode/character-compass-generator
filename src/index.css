@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* Kısa ekran (ör. 360×640, 375×667): canlı oda kartları sıkışık düzene geçer. */
+@custom-variant short (@media (max-height: 720px));
+
 @theme {
   --font-sans: 'Archivo', ui-sans-serif, system-ui, sans-serif;
 

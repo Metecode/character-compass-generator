@@ -11,13 +11,15 @@ interface Props {
   renderCell: (index: number, color: string, scale: number) => ReactNode
   /** Ekranda en fazla bu genişlik (px). */
   maxWidth?: number
+  /** Varsayılan boy sınırı yerine CSS uzunluğu (ör. ekran yüksekliğine göre). */
+  maxSize?: string
 }
 
 /**
  * Oyun ızgarası: pusulayla aynı 1080 düzeni (bantlar, etiketler, imza), ekrana
  * sığacak şekilde ölçeklenir. Hücrelerin içi `renderCell`'den gelir.
  */
-export function PlayBoard({ gridSize, regions, renderCell, maxWidth = 720 }: Props) {
+export function PlayBoard({ gridSize, regions, renderCell, maxWidth = 720, maxSize }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const scale = useFitScale(containerRef, CANVAS_SIZE)
 
@@ -28,7 +30,7 @@ export function PlayBoard({ gridSize, regions, renderCell, maxWidth = 720 }: Pro
       ref={containerRef}
       className="mx-auto aspect-square w-full"
       // Masaüstünde ekran yüksekliğine de sığsın (başlık ve kenar payıyla).
-      style={{ maxWidth: `min(${maxWidth}px, max(320px, calc(100dvh - 200px)))` }}
+      style={{ maxWidth: maxSize ?? `min(${maxWidth}px, max(320px, calc(100dvh - 200px)))` }}
     >
       <div
         className="relative overflow-hidden shadow-brutal-lg"

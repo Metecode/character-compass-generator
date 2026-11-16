@@ -55,6 +55,24 @@ export function sheetFrame(
   return { bottom, maxHeight, keyboard }
 }
 
+/**
+ * Canlı oda çerçevesinin kutusu. Klavye kapalıyken çerçeve sayfayı (100dvh)
+ * doldurur: `height` null. Klavye açıkken görünür alana (visualViewport) oturur;
+ * böylece alanlar ve alttaki eylem düğmesi klavyenin üstünde kalır.
+ */
+export interface FrameBox {
+  /** Layout viewport'un üstünden aşağı px (iOS görünür alanı kaydırabilir). */
+  top: number
+  height: number | null
+  keyboard: boolean
+}
+
+export function roomFrameBox(layoutHeight: number, vv: VisualViewportLike | null | undefined): FrameBox {
+  if (!vv || Math.abs(vv.scale - 1) > 0.01) return { top: 0, height: null, keyboard: false }
+  if (layoutHeight - vv.height <= KEYBOARD_THRESHOLD) return { top: 0, height: null, keyboard: false }
+  return { top: Math.max(0, Math.round(vv.offsetTop)), height: Math.round(vv.height), keyboard: true }
+}
+
 /** Düzenleme paneli başlığı: kişinin adı, isim boşsa "Yeni kişi". */
 export const panelTitle = (name: string | undefined): string => name?.trim() || 'Yeni kişi'
 

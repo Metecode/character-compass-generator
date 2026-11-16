@@ -23,6 +23,7 @@
     "room:check:reveal": "node scripts/room-reveal-check.mjs",
     "room:e2e:reveal": "node scripts/room-reveal-e2e.mjs",
     "room:png": "node scripts/room-png-check.mjs",
+    "room:layout": "node scripts/room-layout-check.mjs",
     "game:check": "node scripts/game-api-check.mjs",
     "room:e2e": "node scripts/room-e2e.mjs"
   },

@@ -68,9 +68,14 @@ function useRenderCell({ cells, players, current, photoOf }: Omit<CellsProps, 'g
 }
 
 /** Ekrandaki oda pusulası (ölçeklenir). */
-export function RoomBoard({ gridSize, maxWidth, ...rest }: CellsProps & { maxWidth?: number }) {
+export function RoomBoard({
+  gridSize,
+  maxWidth,
+  maxSize,
+  ...rest
+}: CellsProps & { maxWidth?: number; maxSize?: string }) {
   const renderCell = useRenderCell(rest)
-  return <PlayBoard gridSize={gridSize} regions={NO_REGIONS} renderCell={renderCell} maxWidth={maxWidth} />
+  return <PlayBoard gridSize={gridSize} regions={NO_REGIONS} renderCell={renderCell} maxWidth={maxWidth} maxSize={maxSize} />
 }
 
 /** PNG için tam boy (1080) çizim; ekran dışında tutulur. */
