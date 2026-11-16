@@ -10,14 +10,13 @@ import {
   ArrowCounterClockwise,
 } from '@phosphor-icons/react'
 import { gameBlockReason } from '../lib/gamePayload'
-import { roomEntryEnabled } from '../lib/roomFlag'
 import { useCompassStore } from '../store/compassStore'
 import { useUiStore } from '../store/uiStore'
 import { ActionMenu } from './ActionMenu'
 import { preloadQuadrants, preloadTheme } from './lazyDialogs'
 
 /**
- * "Oyun" menüsü: "Oyun linki oluştur", "Canlı oda kur" (yalnızca roomFlag bayrağıyla) ve "Oyunlarım". Mobilde alt sayfa,
+ * "Oyun" menüsü: "Oyun linki oluştur", "Canlı oda kur" ve "Oyunlarım". Mobilde alt sayfa,
  * masaüstünde açılır menü. Ağ isteği atmaz; yalnızca pencereleri açar.
  */
 export function GameMenu({ variant = 'toolbar' }: { variant?: 'toolbar' | 'bar' }) {
@@ -37,17 +36,13 @@ export function GameMenu({ variant = 'toolbar' }: { variant?: 'toolbar' | 'bar' 
           inactive: Boolean(gameBlocked),
           onSelect: () => (gameBlocked ? showToast(gameBlocked) : setGameDialog('create')),
         },
-        ...(roomEntryEnabled()
-          ? [
-              {
-                id: 'room',
-                label: 'Canlı oda kur',
-                description: 'Arkadaşlarınla aynı anda oyna',
-                icon: <UsersThree size={20} weight="bold" />,
-                onSelect: () => setGameDialog('room'),
-              },
-            ]
-          : []),
+        {
+          id: 'room',
+          label: 'Canlı oda kur',
+          description: 'Arkadaşlarınla aynı anda oyna',
+          icon: <UsersThree size={20} weight="bold" />,
+          onSelect: () => setGameDialog('room'),
+        },
         {
           id: 'mine',
           label: 'Oyunlarım',

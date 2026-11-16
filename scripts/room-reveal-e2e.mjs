@@ -100,7 +100,7 @@ const COLORS = [[160, 196, 255], [202, 255, 191], [253, 255, 182], [255, 214, 16
 try {
   console.log('== Kurulum')
   admin = await newPlayer('Admin', false)
-  await admin.page.goto(`${BASE}/?oda=1`)
+  await admin.page.goto(`${BASE}/`)
   await admin.page.getByRole('button', { name: 'Oyun', exact: true }).filter({ visible: true }).first().click()
   await admin.page.getByRole('menuitem', { name: /Canlı oda kur/ }).click()
   const dialog = admin.page.getByRole('dialog', { name: 'Canlı oda kur' })

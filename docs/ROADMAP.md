@@ -1,6 +1,6 @@
 # Character Compass — Yol Haritası
 
-Son güncelleme: 14 Kasım 2026 · Yayın: https://compass.meteucar.com
+Son güncelleme: 16 Kasım 2026 · Yayın: https://compass.meteucar.com
 
 ## 1. Ürün
 
@@ -26,6 +26,7 @@ Arkadaş grupları için "karakter pusulası" meme'i üreten web uygulaması: ı
 - iPhone'da PNG çıktısı doğrulandı.
 - **Aşama 2 — Supabase temeli (13 Kasım 2026):** şema ve migration'lar (RLS açık, policy yok, yalnızca service_role'a yetki), private foto kovası, `create-game` / `delete-game` / `cleanup` / `health` Edge Function'ları, yükleme doğrulaması (400×400 JPEG, ≤150 KB, en fazla 16 foto, gövde ≤3 MB), IP başına hız limiti (tuzlanmış özet; oyun oluşturmada saatte 15 + günde 40, sistemde en fazla 1000 aktif oyun), 15 dakikada bir temizlik (pg_cron + pg_net), GitHub Actions ile uyanık tutma, "Oyun linki oluştur" penceresi, "Oyunlarım", `/g/{code}` yer tutucu, `/gizlilik` sayfası. İşletim ve canlı doğrulama adımları: `docs/supabase.md`.
 - **Aşama 3 — Tahmin oyunu (kod ve sunucu tarafı, 14 Kasım 2026; `feature/guess-game` dalı):** `/g/{code}` oyun ekranı (ad, karışık isim listesi, mobilde alt sayfa, "6/9 yerleştirildi", sırayla açılan sonuç ve "Animasyonu geç"), ipucu (32×32 bulanık foto, yarım puan), sunucuda puanlama, cihaz başına tek deneme, oyun başına 200 tahmin, sıralama (ilk 20 + kendi satırın, "Tümünü göster"), skor kartı PNG'si, kurucu istatistiği ve "Bu oyuncuyu sıralamadan kaldır", tek "Oyun" menüsü, "Bu oyun artık yok" sayfası. Yeni uç noktalar: `get-game`, `use-hint`, `submit-guess`, `game-stats`. Sunucu tarafı canlıda; ön yüz main'e birleştirilmeyi bekliyor.
+- **Aşama 4 — Canlı oda (16 Kasım 2026; `feature/live-room` dalı):** `/r/{code}` canlı oda: oda kurma ve kodla katılma, lobi, Klasik / Hızlı mod, rastgele atama, süreli yazma, admin "Aç" ile açılış, tahmin ve skor (az oyuncuda tahminsiz), sonuç pusulası ve PNG, "Odayı şimdi sil", 30 dk sonra silinme. Yeni uç noktalar: `create-room`, `join-room`, `get-room-state`, `room-action`, `room-admin`. Sunucu canlıda; "Canlı oda kur" bayraksız, herkese açık.
 
 ## 3. Verilen kararlar
 
@@ -102,7 +103,7 @@ Kurallar:
 
 **Bitti sayılır:** Bir grup linkten oynadı, sıralama doğru, cevaplar ağ trafiğinden görülemiyor, süre dolunca her şey silinmiş.
 
-### Aşama 4 — Canlı oda modu
+### Aşama 4 — Canlı oda modu ✅ Tamamlandı, herkese açık
 
 > `feature/live-room` dalında üç parça halinde. **Parça A (13 Kasım 2026):** şema, oda kurma/katılma,
 > lobi, canlı sinyal (public Broadcast + gizli `channel_id`), 5 sn yoklamaya düşme, yeniden bağlanma,
@@ -125,9 +126,9 @@ Kurallar:
 > Açılmış kişiler adaylardan düşer. 1 doğru = 1 puan. Madde kimliği istemciye gitmez (yazarlığı
 > ele verirdi); gizleme hücre içi rastgele sırayla yapılır. Yazarlık oyun bittikten sonra da
 > gösterilmez. Tam oyun (6 kişi, Klasik) ~200 Edge Function çağrısı.
-> **Geçici gizli giriş:** "Canlı oda kur" menüde yalnızca cihazda bayrak varsa görünür
-> (`/?oda=1` yazar, `/?oda=0` siler; `src/lib/roomFlag.ts`). `/r/{kod}` bayraksız çalışır.
-> Cihazda denenip onaylanınca bayrak ve `roomFlag.ts` ayrı bir işle kaldırılacak.
+> **Herkese açıldı (16 Kasım 2026):** geçici gizli giriş (`/?oda=1` bayrağı,
+> `src/lib/roomFlag.ts`) kaldırıldı; "Canlı oda kur" menüde her cihazda görünür.
+> Cihazlarda kalan eski `compass-room-entry` anahtarı açılışta silinir (`src/lib/legacyStorage.ts`).
 
 "Ortak doldurma" fikrinin yerine geçer.
 
