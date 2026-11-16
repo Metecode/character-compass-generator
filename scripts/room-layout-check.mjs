@@ -2,12 +2,13 @@
 //
 //   pnpm build
 //   pnpm room:layout                  # vite preview'ı kendisi açar (4319)
+//   ONLY=desktop pnpm room:layout     # yalnızca masaüstü ekranları
 //   OUT=klasör pnpm room:layout       # varsayılan: .shots/room-layout
 //   BASE_URL=http://localhost:5173 pnpm room:layout   # çalışan bir sunucuya karşı
 //
 // 3, 6 ve 16 oyunculu odalarda her aşama (lobi, yazma, yazma + klavye, açılış
-// tahmin / seçildi / açıldı / admin, sonuç) dört ekranda çekilir: 360×640,
-// 390×844, 430×932, 1440×900. Supabase uç noktaları Playwright'ta yakalanıp
+// tahmin / seçildi / açıldı / admin, sonuç) şu ekranlarda çekilir: 360×640,
+// 390×844, 430×932, 375×667 (mobil); 1280×720, 1440×900, 1920×1080 (masaüstü). Supabase uç noktaları Playwright'ta yakalanıp
 // sahte MemberView döner; Realtime soketi taklit edilir. Site dışına giden her
 // istek engellenir ve rapora yazılır (0 olmalı).
 //
@@ -16,6 +17,10 @@
 // taşmaması, en küçük aday düğmesi (≥44 px), yatay taşma. Sonuçta (kayabilir)
 // kazanan, pusula ve düğmelerin ilk ekranda olması. Sonuç ekranında ayrıca
 // PNG indirilip 1080×1080 olduğu doğrulanır (2×2, 3×3, 4×4).
+//
+// Masaüstü: başlık ile içerik aynı genişlikte mi (sol/sağ kenar); açılışta iki
+// sütunun (sol: kart + panel, sağ: pusula) üst ve alt kenarları aynı pikselde mi;
+// tahmin adımındaki "?" yer tutucusu ile açılınca gelen fotoğraf aynı kutuda mı.
 //
 // Klavye: Playwright gerçek klavye açamaz; visualViewport yüksekliği ekranın
 // ~%42'si kadar küçültülerek taklit edilir. iOS Safari'de gerçek cihaz testi gerekir.
@@ -36,9 +41,12 @@ const VIEWPORTS = [
   { id: '430x932', width: 430, height: 932, mobile: true },
   // Ek: "3 madde ve foto 667 px yükseklikte de sığsın" şartı için.
   { id: '375x667', width: 375, height: 667, mobile: true },
+  { id: '1280x720', width: 1280, height: 720, mobile: false },
   { id: '1440x900', width: 1440, height: 900, mobile: false },
+  { id: '1920x1080', width: 1920, height: 1080, mobile: false },
 ]
 const COUNTS = [3, 6, 16]
+const ONLY = process.env.ONLY ?? ''
 const CODE = 'LAYOUTCHECK0001'
 
 // ---------- sahte veri ----------
@@ -250,12 +258,36 @@ function measure() {
     const s = scroller ? scroller.getBoundingClientRect() : { top: 0, bottom: visibleH }
     out.focusVisible = a.top >= Math.max(0, s.top) - 1 && a.bottom <= Math.min(visibleH, s.bottom) + 1
   }
+  const ri = (el) => {
+    if (!el) return null
+    const b = el.getBoundingClientRect()
+    return { top: Math.round(b.top), bottom: Math.round(b.bottom), left: Math.round(b.left), right: Math.round(b.right) }
+  }
+  const head = ri(q('[data-room-header-inner]'))
+  const inner = ri(q('[data-room-inner]'))
+  out.align = head && inner ? Math.max(Math.abs(head.left - inner.left), Math.abs(head.right - inner.right)) : null
+  out.innerWidth = inner ? inner.right - inner.left : null
+  const left = q('[data-reveal-left]')
+  const boardBox = q('[data-reveal-board]')
+  if (left && boardBox) {
+    // Görünen kenarlar: kartın üstü, panelin altı; pusulanın kendisi (ölçeklenmiş kutu).
+    const l = { top: ri(left.firstElementChild).top, bottom: ri(left.lastElementChild).bottom }
+    const visible = boardBox.querySelector('.shadow-brutal-lg') ?? boardBox
+    const b = ri(visible)
+    out.columns = { leftTop: l.top, leftBottom: l.bottom, boardTop: b.top, boardBottom: b.bottom, edge: b.bottom - b.top, boardWidth: b.right - b.left }
+  }
+  const slot = ri(q('[data-photo-slot]'))
+  out.slot = slot
   if (out.mode === 'scroll') {
     const bottomOf = (s) => (q(s) ? Math.round(r(q(s)).bottom) : null)
     out.winnerBottom = bottomOf('[data-room-winner]')
     out.boardBottom = bottomOf('[data-room-board]')
     out.buttonsBottom = bottomOf('[data-room-buttons]')
-    out.firstScreen = out.buttonsBottom !== null && out.buttonsBottom <= window.innerHeight
+    out.firstScreen =
+      out.buttonsBottom !== null &&
+      out.buttonsBottom <= window.innerHeight &&
+      (out.boardBottom ?? 0) <= window.innerHeight &&
+      (out.winnerBottom ?? 0) <= window.innerHeight
     out.pageScrollable = pageScroll ? pageScroll.scrollHeight - pageScroll.clientHeight : 0
   }
   return out
@@ -274,6 +306,7 @@ try {
     for (const sc of SCENARIOS) {
       for (const vp of VIEWPORTS) {
         if (sc.keyboard && !vp.mobile) continue
+        if (ONLY === 'desktop' && vp.mobile) continue
         const ctx = await browser.newContext({
           viewport: { width: vp.width, height: vp.height },
           isMobile: vp.mobile,
@@ -388,6 +421,14 @@ try {
         if (m.minCandidate !== null && m.minCandidate < 44) problems.push(`aday ${m.minCandidate}px`)
         if (m.hOverflow > 1) problems.push(`yatay +${m.hOverflow}px`)
         if (m.mode === 'yok') problems.push('çerçeve yok')
+        if (!vp.mobile && m.align !== null && m.align > 1) problems.push(`başlık hizası ${m.align}px`)
+        if (m.columns) {
+          const dt = Math.abs(m.columns.leftTop - m.columns.boardTop)
+          const db = Math.abs(m.columns.leftBottom - m.columns.boardBottom)
+          if (dt > 1) problems.push(`sütun üstü Δ${dt}px`)
+          if (db > 1) problems.push(`sütun altı Δ${db}px`)
+          if (Math.abs(m.columns.edge - m.columns.boardWidth) > 1) problems.push('pusula kare değil')
+        }
         if (problems.length) failures++
         rows.push({ n, sc: sc.id, phase: sc.phase, vp: vp.id, mobile: vp.mobile, m, problems, shot })
         console.log(`${problems.length ? 'FAIL' : 'OK  '} ${n}p ${sc.id.padEnd(15)} ${vp.id.padEnd(8)} ${problems.join(', ')}`)
@@ -437,6 +478,19 @@ try {
 
 // ---------- rapor ----------
 
+// "?" yer tutucusu ile açılınca gelen fotoğraf aynı kutuda mı (masaüstü).
+const jumps = []
+for (const n of COUNTS) {
+  for (const vp of VIEWPORTS.filter((v) => !v.mobile)) {
+    const a = rows.find((r) => r.n === n && r.vp === vp.id && r.sc === 'acilis-tahmin')?.m.slot
+    const b = rows.find((r) => r.n === n && r.vp === vp.id && r.sc === 'acilis-acildi')?.m.slot
+    if (!a || !b) continue
+    const d = Math.max(...['top', 'bottom', 'left', 'right'].map((k) => Math.abs(a[k] - b[k])))
+    if (d > 1) failures++
+    jumps.push({ n, vp: vp.id, a, b, d })
+  }
+}
+
 const cell = (v) => (v === null || v === undefined ? '–' : typeof v === 'boolean' ? (v ? 'evet' : 'HAYIR') : String(v))
 const lines = [
   '# Canlı oda yerleşim ölçümü',
@@ -453,6 +507,29 @@ const lines = [
   ...rows.map(
     ({ n, sc, vp, m, problems }) =>
       `| ${n} | ${sc} | ${vp}${sc.includes('klavye') ? ` (görünür ${m.visibleH})` : ''} | ${m.mode === 'fixed' ? 'sabit' : m.mode === 'scroll' ? 'kayar' : m.mode} | ${cell(m.pageOverflow)} | ${cell(m.contentOverflow)} | ${cell(m.footerVisible)} | ${cell(m.cardOverflow)} | ${cell(m.minCandidate)} | ${sc.includes('klavye') ? cell(m.focusVisible) : '–'} | ${m.mode === 'scroll' ? cell(m.firstScreen) : '–'} | ${problems.length ? problems.join(', ') : 'OK'} |`,
+  ),
+  '',
+  '## Masaüstü hizası',
+  '',
+  'Açılışta iki sütun: sol = kartın üstü / panelin altı, sağ = pusulanın kendisi (px, görünür alana göre).',
+  'Hiza = başlıktaki logo/Diğer kutusu ile içeriğin sol-sağ kenar farkı (px). İçerik = içerik genişliği (px).',
+  '',
+  '| Oyuncu | Aşama | Ekran | İçerik | Hiza | Sol üst | Pusula üst | Δ üst | Sol alt | Pusula alt | Δ alt | Pusula kenarı |',
+  '|---|---|---|---|---|---|---|---|---|---|---|---|',
+  ...rows
+    .filter((r) => !r.mobile)
+    .map(({ n, sc, vp, m }) => {
+      const c = m.columns
+      return c
+        ? `| ${n} | ${sc} | ${vp} | ${cell(m.innerWidth)} | ${cell(m.align)} | ${c.leftTop} | ${c.boardTop} | ${Math.abs(c.leftTop - c.boardTop)} | ${c.leftBottom} | ${c.boardBottom} | ${Math.abs(c.leftBottom - c.boardBottom)} | ${c.edge}×${c.boardWidth} |`
+        : `| ${n} | ${sc} | ${vp} | ${cell(m.innerWidth)} | ${cell(m.align)} | – | – | – | – | – | – | – |`
+    }),
+  '',
+  '### Yer tutucu → fotoğraf (zıplama)',
+  '',
+  ...jumps.map(
+    (j) =>
+      `- ${j.n} oyuncu, ${j.vp}: "?" ${j.a.right - j.a.left}×${j.a.bottom - j.a.top} @ (${j.a.left}, ${j.a.top}) → foto ${j.b.right - j.b.left}×${j.b.bottom - j.b.top} @ (${j.b.left}, ${j.b.top}) · fark ${j.d}px ${j.d > 1 ? 'HATALI' : 'OK'}`,
   ),
   '',
   '## Diğer menüsü (onaylar)',

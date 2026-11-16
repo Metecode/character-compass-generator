@@ -1,6 +1,7 @@
 import { CircleNotch, Crown, DownloadSimple, PencilSimpleLine, Trash, Trophy } from '@phosphor-icons/react'
 import { useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useIsDesktop } from '../../hooks/useMediaQuery'
 import { useServerNow } from '../../hooks/useServerNow'
 import { downloadBlob, renderNodePng } from '../../lib/exportPng'
 import { roomAdmin, roomErrorMessage, type MemberView, type RoomSession } from '../../lib/roomApi'
@@ -62,6 +63,7 @@ export function RoomResultView({
   const showToast = useUiStore((s) => s.showToast)
   const players = useMemo(() => new Map(data.players.map((p) => [p.id, p])), [data.players])
   const winners = winnersOf(res.scores)
+  const desktop = useIsDesktop()
   const ranks = ranksOf(res.scores)
   const now = useServerNow(clockOffset, 15_000)
   const [confirm, setConfirm] = useState<Confirm | null>(null)
@@ -164,69 +166,95 @@ export function RoomResultView({
     </section>
   )
 
-  return (
-    <RoomFrame title="Sonuç" scroll>
-      <div className="flex flex-col gap-3">
-        {data.guessing ? (
-          <section
-            data-room-winner
-            className="flex items-center gap-3 rounded-2xl border-[3px] border-ink bg-accent p-3 shadow-brutal-lg motion-safe:animate-pop-in"
-          >
-            <Trophy size={40} weight="fill" className="shrink-0" aria-hidden />
-            <div className="min-w-0">
-              <p className="text-xs font-black tracking-wide uppercase">Oyun bitti</p>
-              <h1 className="text-2xl leading-tight font-black tracking-tight text-balance">
-                {winners.ids.length === 0
-                  ? 'Bu sefer kimse bilemedi!'
-                  : winners.ids.length === 1
-                    ? `Kazanan: ${winnerNames[0]}`
-                    : `Kazananlar: ${winnerNames.join(', ')}`}
-              </h1>
-              {winners.score > 0 && <p className="text-[15px] font-bold">{winners.score} puan</p>}
-            </div>
-          </section>
-        ) : (
-          <h1 data-room-winner className="text-2xl font-black tracking-tight">
-            Oyun bitti
+  const winner = (
+    data.guessing ? (
+      <section
+        data-room-winner
+        className="flex items-center gap-3 rounded-2xl border-[3px] border-ink bg-accent p-3 shadow-brutal-lg motion-safe:animate-pop-in"
+      >
+        <Trophy size={40} weight="fill" className="shrink-0" aria-hidden />
+        <div className="min-w-0">
+          <p className="text-xs font-black tracking-wide uppercase">Oyun bitti</p>
+          <h1 className="text-2xl leading-tight font-black tracking-tight text-balance">
+            {winners.ids.length === 0
+              ? 'Bu sefer kimse bilemedi!'
+              : winners.ids.length === 1
+                ? `Kazanan: ${winnerNames[0]}`
+                : `Kazananlar: ${winnerNames.join(', ')}`}
           </h1>
-        )}
-
-        <div data-room-board>
-          <RoomBoard
-            gridSize={res.gridSize}
-            cells={res.cells}
-            players={players}
-            maxSize={`min(560px, max(240px, calc(100dvh - ${data.guessing ? 300 : 240}px)))`}
-          />
+          {winners.score > 0 && <p className="text-[15px] font-bold">{winners.score} puan</p>}
         </div>
+      </section>
+    ) : (
+      <h1 data-room-winner className="text-2xl font-black tracking-tight">
+        Oyun bitti
+      </h1>
+    )
+  )
 
-        <div className="flex flex-wrap gap-2" data-room-buttons>
-          <button type="button" className="btn btn-primary" onClick={downloadPng} disabled={busy !== null} aria-busy={busy === 'png'}>
-            {busy === 'png' ? (
-              <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
-            ) : (
-              <DownloadSimple size={20} weight="bold" aria-hidden />
-            )}
-            PNG indir
-          </button>
-          <button type="button" className="btn" onClick={() => setConfirm('import')} disabled={busy !== null}>
-            <PencilSimpleLine size={20} weight="bold" aria-hidden />
-            Düzenleyiciye aktar
-          </button>
-          {data.me.isAdmin && (
-            <button type="button" className="btn btn-danger ml-auto" onClick={() => setConfirm('delete')} disabled={busy !== null}>
-              <Trash size={20} weight="bold" aria-hidden />
-              Odayı şimdi sil
-            </button>
+  const actions = (
+    <>
+      <div className="flex flex-wrap gap-2" data-room-buttons>
+        <button type="button" className="btn btn-primary" onClick={downloadPng} disabled={busy !== null} aria-busy={busy === 'png'}>
+          {busy === 'png' ? (
+            <CircleNotch size={20} weight="bold" className="animate-spin" aria-hidden />
+          ) : (
+            <DownloadSimple size={20} weight="bold" aria-hidden />
           )}
-        </div>
-        <p className="text-sm text-muted">
-          {deletesInText(res.deletesAt - now)} Fotoğraflar, adlar ve maddeler sunucudan tamamen kalkar; indirdiğin PNG
-          ve düzenleyiciye aktardığın pusula yalnızca bu cihazda kalır.
-        </p>
-
-        {scoreTable}
+          PNG indir
+        </button>
+        <button type="button" className="btn" onClick={() => setConfirm('import')} disabled={busy !== null}>
+          <PencilSimpleLine size={20} weight="bold" aria-hidden />
+          Düzenleyiciye aktar
+        </button>
+        {data.me.isAdmin && (
+          <button type="button" className="btn btn-danger ml-auto" onClick={() => setConfirm('delete')} disabled={busy !== null}>
+            <Trash size={20} weight="bold" aria-hidden />
+            Odayı şimdi sil
+          </button>
+        )}
       </div>
+      <p className="text-sm text-muted">
+        {deletesInText(res.deletesAt - now)} Fotoğraflar, adlar ve maddeler sunucudan tamamen kalkar; indirdiğin PNG
+        ve düzenleyiciye aktardığın pusula yalnızca bu cihazda kalır.
+      </p>
+    </>
+  )
+
+  return (
+    <RoomFrame title="Sonuç" scroll width={desktop ? 'wide' : 'narrow'}>
+      {desktop ? (
+        // Masaüstü: solda kazanan, düğmeler ve skor tablosu; sağda ekran yüksekliğine sığan pusula.
+        <div className="grid items-start gap-6" style={{ gridTemplateColumns: 'minmax(0, 5fr) minmax(0, 7fr)' }}>
+          <div className="flex flex-col gap-3">
+            {winner}
+            {actions}
+            {scoreTable}
+          </div>
+          <div data-room-board>
+            <RoomBoard
+              gridSize={res.gridSize}
+              cells={res.cells}
+              players={players}
+              maxSize="min(100%, max(320px, calc(100dvh - 100px)))"
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {winner}
+          <div data-room-board>
+            <RoomBoard
+              gridSize={res.gridSize}
+              cells={res.cells}
+              players={players}
+              maxSize={`min(560px, max(240px, calc(100dvh - ${data.guessing ? 300 : 240}px)))`}
+            />
+          </div>
+          {actions}
+          {scoreTable}
+        </div>
+      )}
 
       {confirm && (
         <Modal

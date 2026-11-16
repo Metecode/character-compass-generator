@@ -7,14 +7,17 @@ import {
   Eye,
   EyeSlash,
   GridFour,
+  Question,
   SmileySad,
   Trash,
   Trophy,
 } from '@phosphor-icons/react'
 import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useElementSize } from '../../hooks/useElementSize'
 import { useIsDesktop } from '../../hooks/useMediaQuery'
 import { boardCompass } from '../../lib/boardCompass'
 import { regionOf, regionsOf } from '../../lib/grid'
+import { LEFT_FR, RIGHT_FR, boardEdge } from '../../lib/revealLayout'
 import {
   roomAction,
   roomAdmin,
@@ -45,7 +48,9 @@ type Confirm = { kind: 'hide'; item: RoomItem } | { kind: 'delete' }
  *
  * Telefonda tek ekran: üstte ilerleme ve skor şeridi, ortada tek kart, altta
  * tahmin ya da admin düğmesi; o ana kadarki pusula "Pusulayı gör" ile alt sayfada.
- * Masaüstünde (lg) solda kart ve eylemler, sağda dolan pusula.
+ * Masaüstünde (lg) üstte tam genişlikte ilerleme + skor satırı, altında iki sütun:
+ * solda kart ve panel, sağda kare pusula; iki sütun aynı üst ve alt kenarda (boardEdge).
+ * Masaüstünde tahmin adımında fotoğrafın yerinde aynı boyda "?" yer tutucu durur.
  */
 export function RevealView({
   data,
@@ -61,6 +66,8 @@ export function RevealView({
   const r = data.reveal!
   const showToast = useUiStore((s) => s.showToast)
   const desktop = useIsDesktop()
+  const [areaRef, area] = useElementSize<HTMLDivElement>()
+  const edge = boardEdge(area.width, area.height)
   const players = useMemo(() => new Map(data.players.map((p) => [p.id, p])), [data.players])
   const isAdmin = data.me.isAdmin
   const shown = r.step === 'shown'
@@ -156,7 +163,8 @@ export function RevealView({
       cells={r.opened}
       players={players}
       current={shown || closed ? null : { cell: r.cell, items: r.items }}
-      maxWidth={desktop ? 640 : 520}
+      maxWidth={520}
+      maxSize={desktop ? `${edge}px` : undefined}
     />
   )
 
@@ -171,15 +179,22 @@ export function RevealView({
       }`}
       style={{ background: color }}
     >
-      <div className="my-auto">
-        {shown && target ? (
+      <div className={desktop ? '' : 'my-auto'}>
+        {shown && target && desktop ? (
+          <div className="flex flex-col items-center text-center">
+            <img src={target.photo} alt="" width={160} height={160} data-photo-slot className={`${DESK_PHOTO} object-cover`} />
+            <h1 id="reveal-title" className={DESK_TITLE}>
+              {target.id === data.me.id ? `${target.name} (sen!)` : target.name}
+            </h1>
+          </div>
+        ) : shown && target ? (
           <div className="flex flex-col items-center text-center short:flex-row short:justify-center short:gap-3 short:text-left">
             <img
               src={target.photo}
               alt=""
               width={160}
               height={160}
-              className="size-[clamp(64px,calc(100dvh-560px),160px)] shrink-0 rounded-2xl border-[3px] border-ink object-cover shadow-brutal lg:size-40"
+              className="size-[clamp(64px,calc(100dvh-560px),160px)] shrink-0 rounded-2xl border-[3px] border-ink object-cover shadow-brutal"
             />
             <h1
               id="reveal-title"
@@ -197,6 +212,16 @@ export function RevealView({
               Bu odada tahmin yok: {isAdmin ? 'sen' : (admin?.name ?? 'admin')} açtıkça kişiler ve maddeleri tek tek
               görünecek.
             </p>
+          </div>
+        ) : desktop ? (
+          // Fotoğrafın geleceği yerde aynı boyda yer tutucu: açılınca içerik zıplamaz.
+          <div className="flex flex-col items-center text-center">
+            <div data-photo-slot aria-hidden className={`${DESK_PHOTO} flex items-center justify-center bg-white/70`}>
+              <Question size={64} weight="bold" />
+            </div>
+            <h1 id="reveal-title" className={DESK_TITLE}>
+              Bu kim?
+            </h1>
           </div>
         ) : (
           <h1 id="reveal-title" className="text-center text-2xl font-black tracking-tight short:text-xl sm:text-3xl">
@@ -318,16 +343,38 @@ export function RevealView({
       width={desktop ? 'wide' : 'narrow'}
     >
       {desktop ? (
-        <div className="grid min-h-0 flex-1 grid-cols-2 gap-6">
-          <div className="flex min-h-0 flex-col gap-3">
-            {top}
-            {card}
-            <div className="shrink-0 rounded-2xl border-[3px] border-ink bg-surface p-3 shadow-brutal">{actions}</div>
+        <>
+          <div className="flex shrink-0 items-center gap-4" data-reveal-top>
+            <div className="shrink-0" style={{ width: r.total * 28 + (r.total - 1) * 4 }}>
+              <RevealProgress opened={r.opened} total={r.total} position={r.position} players={players} />
+            </div>
+            {guessing && (
+              <div className="min-w-0 flex-1">
+                <ScoreStrip scores={r.scores} players={players} meId={data.me.id} fresh={fresh} />
+              </div>
+            )}
           </div>
-          <section aria-label="Pusula" className="flex min-h-0 items-start justify-center">
-            {board}
-          </section>
-        </div>
+          <div ref={areaRef} className="min-h-0 flex-1">
+            <div
+              className="grid gap-6"
+              style={{
+                height: edge || undefined,
+                gridTemplateColumns: `minmax(0, ${LEFT_FR}fr) minmax(0, ${RIGHT_FR}fr)`,
+              }}
+            >
+              {/* Sol sütun boy kabı: fotoğraf/yer tutucu boyu sütun yüksekliğine göre (cqh). */}
+              <div data-reveal-left className="flex min-h-0 flex-col gap-3 [container-type:size]">
+                {card}
+                <div className="shrink-0 rounded-2xl border-[3px] border-ink bg-surface p-3 shadow-brutal">{actions}</div>
+              </div>
+              <section aria-label="Pusula" className="flex min-h-0 justify-center">
+                <div data-reveal-board style={{ width: edge, height: edge }}>
+                  {board}
+                </div>
+              </section>
+            </div>
+          </div>
+        </>
       ) : (
         <>
           {top}
@@ -381,6 +428,11 @@ export function RevealView({
     </RoomFrame>
   )
 }
+
+/** Masaüstü kart başlığı: fotoğraf ve yer tutucusu aynı kutu, ad ve "Bu kim?" aynı satır. */
+const DESK_PHOTO =
+  'size-[clamp(72px,calc(100cqh-480px),160px)] shrink-0 rounded-2xl border-[3px] border-ink shadow-brutal'
+const DESK_TITLE = 'mt-2 max-w-full min-w-0 truncate text-3xl leading-tight font-black tracking-tight'
 
 /** Açılanlar küçük fotoğraflarıyla, sıradaki vurgulu, kalanlar boş halka. */
 function RevealProgress({
@@ -513,7 +565,7 @@ function GuessPicker({
       <ul
         ref={gridRef}
         data-room-scroll="candidates"
-        className="-mx-1 grid max-h-[min(30dvh,232px)] grid-cols-4 short:max-h-[23dvh] gap-2 overflow-y-auto overscroll-contain p-1 sm:grid-cols-6"
+        className="-mx-1 grid max-h-[min(30dvh,232px)] grid-cols-4 max-lg:short:max-h-[23dvh] lg:max-h-[124px] gap-2 overflow-y-auto overscroll-contain p-1 sm:grid-cols-6"
       >
         {candidates.map((id) => {
           const p = players.get(id)

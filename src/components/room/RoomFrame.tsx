@@ -3,7 +3,8 @@ import { useEffect, type ReactNode } from 'react'
 import { useFrameBox } from '../../hooks/useFrameBox'
 import { ActionMenu, type MenuItem } from '../ActionMenu'
 
-const WIDTHS = { narrow: 'max-w-xl', medium: 'max-w-4xl', wide: 'max-w-6xl' } as const
+/** `wide`: masaüstündeki oda ekranlarının ortak en fazla genişliği (başlık da aynı hizada). */
+const WIDTHS = { narrow: 'max-w-xl', wide: 'max-w-[1200px]' } as const
 
 /**
  * Canlı odanın ortak çerçevesi: ince başlık, esneyen içerik, altta sabit eylem alanı.
@@ -46,7 +47,7 @@ export function RoomFrame({
 
   const header = (
     <header className="shrink-0 border-b-[3px] border-ink bg-surface px-3 pt-[max(6px,env(safe-area-inset-top))] pb-1.5 sm:px-4">
-      <div className={`mx-auto flex min-h-11 items-center gap-2 ${max}`}>
+      <div data-room-header-inner className={`mx-auto flex min-h-11 items-center gap-2 ${max}`}>
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border-2 border-ink bg-accent" aria-hidden>
           <CompassIcon size={20} weight="bold" />
         </span>
@@ -73,7 +74,11 @@ export function RoomFrame({
     return (
       <div className="h-full overflow-y-auto" data-page-scroll data-room-frame="scroll">
         {header}
-        <main className={`mx-auto w-full px-4 pt-3 pb-[max(24px,env(safe-area-inset-bottom))] ${max}`}>{children}</main>
+        <main className="px-4 pt-3 pb-[max(24px,env(safe-area-inset-bottom))]">
+          <div data-room-inner className={`mx-auto w-full ${max}`}>
+            {children}
+          </div>
+        </main>
       </div>
     )
   }
@@ -86,7 +91,9 @@ export function RoomFrame({
     >
       {header}
       <main data-room-content className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 py-3 short:py-2">
-        <div className={`mx-auto flex min-h-0 w-full flex-1 flex-col gap-3 short:gap-2 ${max}`}>{children}</div>
+        <div data-room-inner className={`mx-auto flex min-h-0 w-full flex-1 flex-col gap-3 short:gap-2 ${max}`}>
+          {children}
+        </div>
       </main>
       {footer && (
         <div

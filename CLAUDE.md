@@ -44,6 +44,8 @@ pnpm + Node 22.20.0 (`.nvmrc`).
   Oda ekranları ortak `src/components/room/RoomFrame.tsx` çerçevesinde: lobi, yazma ve açılış
   telefonda tek ekran (100dvh; kayan yer yalnızca iç listeler), BITTI kayar; klavye açıkken
   çerçeve visualViewport'a oturur (`roomFrameBox`). Kısa ekran için `short:` varyantı (`index.css`).
+  Masaüstünde (lg) içerik ve başlık 1200 px; açılışta iki sütun aynı yükseklikte, pusula kenarı
+  `boardEdge` (`src/lib/revealLayout.ts`).
   Yerleşim ölçümü sahte veriyle, sunucusuz: `pnpm build && pnpm room:layout` → `.shots/room-layout/rapor.md`.
 - `/g/*` linkleri `g.html` girişinden açılır (aynı `src/main.tsx`, yalnızca og/twitter etiketleri
   farklı; `public/_redirects`'te genel kuraldan önce). Önizleme görseli `public/og-game.png`,
