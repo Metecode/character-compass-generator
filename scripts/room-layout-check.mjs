@@ -20,7 +20,9 @@
 //
 // Masaüstü: başlık ile içerik aynı genişlikte mi (sol/sağ kenar); açılışta iki
 // sütunun (sol: kart + panel, sağ: pusula) üst ve alt kenarları aynı pikselde mi;
-// tahmin adımındaki "?" yer tutucusu ile açılınca gelen fotoğraf aynı kutuda mı.
+// tahmin adımındaki "?" yer tutucusu ile açılınca gelen fotoğraf aynı kutuda mı;
+// blok (açılış: üst satır + sütunlar; lobi; sonuç) başlığın altındaki alanda
+// dikeyde ortalı mı (üst ve alt boşluk farkı ≤1 px).
 //
 // Klavye: Playwright gerçek klavye açamaz; visualViewport yüksekliği ekranın
 // ~%42'si kadar küçültülerek taklit edilir. iOS Safari'de gerçek cihaz testi gerekir.
@@ -276,6 +278,18 @@ function measure() {
     const b = ri(visible)
     out.columns = { leftTop: l.top, leftBottom: l.bottom, boardTop: b.top, boardBottom: b.bottom, edge: b.bottom - b.top, boardWidth: b.right - b.left }
   }
+  const block = q('[data-room-block]')
+  if (block) {
+    let box
+    if (out.mode === 'scroll') {
+      const main = q('[data-room-frame] main')
+      const r0 = main.getBoundingClientRect()
+      const cs = getComputedStyle(main)
+      box = { top: r0.top + parseFloat(cs.paddingTop), bottom: r0.bottom - parseFloat(cs.paddingBottom) }
+    } else box = block.parentElement.getBoundingClientRect()
+    const b = block.getBoundingClientRect()
+    out.center = { above: Math.round(b.top - box.top), below: Math.round(box.bottom - b.bottom) }
+  }
   const slot = ri(q('[data-photo-slot]'))
   out.slot = slot
   if (out.mode === 'scroll') {
@@ -422,6 +436,9 @@ try {
         if (m.hOverflow > 1) problems.push(`yatay +${m.hOverflow}px`)
         if (m.mode === 'yok') problems.push('çerçeve yok')
         if (!vp.mobile && m.align !== null && m.align > 1) problems.push(`başlık hizası ${m.align}px`)
+        if (!vp.mobile && m.center && Math.abs(m.center.above - m.center.below) > 1) {
+          problems.push(`dikey ortalama üst ${m.center.above} / alt ${m.center.below}px`)
+        }
         if (m.columns) {
           const dt = Math.abs(m.columns.leftTop - m.columns.boardTop)
           const db = Math.abs(m.columns.leftBottom - m.columns.boardBottom)
@@ -513,16 +530,18 @@ const lines = [
   '',
   'Açılışta iki sütun: sol = kartın üstü / panelin altı, sağ = pusulanın kendisi (px, görünür alana göre).',
   'Hiza = başlıktaki logo/Diğer kutusu ile içeriğin sol-sağ kenar farkı (px). İçerik = içerik genişliği (px).',
+  'Üst/alt boşluk = blokla başlığın altındaki alan arasındaki boşluk (px); eşitse blok dikeyde ortalı.',
   '',
-  '| Oyuncu | Aşama | Ekran | İçerik | Hiza | Sol üst | Pusula üst | Δ üst | Sol alt | Pusula alt | Δ alt | Pusula kenarı |',
-  '|---|---|---|---|---|---|---|---|---|---|---|---|',
+  '| Oyuncu | Aşama | Ekran | İçerik | Hiza | Üst boşluk | Alt boşluk | Sol üst | Pusula üst | Δ üst | Sol alt | Pusula alt | Δ alt | Pusula kenarı |',
+  '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
   ...rows
     .filter((r) => !r.mobile)
     .map(({ n, sc, vp, m }) => {
       const c = m.columns
+      const gaps = `${cell(m.center?.above)} | ${cell(m.center?.below)}`
       return c
-        ? `| ${n} | ${sc} | ${vp} | ${cell(m.innerWidth)} | ${cell(m.align)} | ${c.leftTop} | ${c.boardTop} | ${Math.abs(c.leftTop - c.boardTop)} | ${c.leftBottom} | ${c.boardBottom} | ${Math.abs(c.leftBottom - c.boardBottom)} | ${c.edge}×${c.boardWidth} |`
-        : `| ${n} | ${sc} | ${vp} | ${cell(m.innerWidth)} | ${cell(m.align)} | – | – | – | – | – | – | – |`
+        ? `| ${n} | ${sc} | ${vp} | ${cell(m.innerWidth)} | ${cell(m.align)} | ${gaps} | ${c.leftTop} | ${c.boardTop} | ${Math.abs(c.leftTop - c.boardTop)} | ${c.leftBottom} | ${c.boardBottom} | ${Math.abs(c.leftBottom - c.boardBottom)} | ${c.edge}×${c.boardWidth} |`
+        : `| ${n} | ${sc} | ${vp} | ${cell(m.innerWidth)} | ${cell(m.align)} | ${gaps} | – | – | – | – | – | – | – |`
     }),
   '',
   '### Yer tutucu → fotoğraf (zıplama)',

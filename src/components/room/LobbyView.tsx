@@ -129,7 +129,11 @@ export function LobbyView({
 
   return (
     <RoomFrame title="Lobi" menu={menu} footer={footer} width={desktop ? 'wide' : 'narrow'}>
-      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-6">
+      {/* Masaüstü: blok içerik kadar (en fazla alan kadar) ve dikeyde ortalı; liste kendi içinde kayar. */}
+      <div
+        data-room-block
+        className="flex min-h-0 flex-1 flex-col gap-3 lg:my-auto lg:grid lg:max-h-full lg:flex-none lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)] lg:gap-6"
+      >
         <div className="flex shrink-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
           <section className="rounded-2xl border-[3px] border-ink bg-surface p-3 shadow-brutal sm:p-4" aria-labelledby="lobby-title">
             <h1 id="lobby-title" className="text-xl leading-tight font-black tracking-tight text-balance sm:text-2xl">

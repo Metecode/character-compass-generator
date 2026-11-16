@@ -225,7 +225,11 @@ export function RoomResultView({
     <RoomFrame title="Sonuç" scroll width={desktop ? 'wide' : 'narrow'}>
       {desktop ? (
         // Masaüstü: solda kazanan, düğmeler ve skor tablosu; sağda ekran yüksekliğine sığan pusula.
-        <div className="grid items-start gap-6" style={{ gridTemplateColumns: 'minmax(0, 5fr) minmax(0, 7fr)' }}>
+        <div
+          data-room-block
+          className="grid items-start gap-6"
+          style={{ gridTemplateColumns: 'minmax(0, 5fr) minmax(0, 7fr)' }}
+        >
           <div className="flex flex-col gap-3">
             {winner}
             {actions}

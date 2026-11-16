@@ -72,10 +72,11 @@ export function RoomFrame({
 
   if (scroll) {
     return (
-      <div className="h-full overflow-y-auto" data-page-scroll data-room-frame="scroll">
+      <div className="flex h-full flex-col overflow-y-auto" data-page-scroll data-room-frame="scroll">
         {header}
-        <main className="px-4 pt-3 pb-[max(24px,env(safe-area-inset-bottom))]">
-          <div data-room-inner className={`mx-auto w-full ${max}`}>
+        {/* Masaüstünde içerik ekrandan kısaysa başlığın altında dikeyde ortalanır. */}
+        <main className="flex shrink-0 grow flex-col px-4 pt-3 pb-[max(24px,env(safe-area-inset-bottom))]">
+          <div data-room-inner className={`mx-auto w-full lg:my-auto ${max}`}>
             {children}
           </div>
         </main>

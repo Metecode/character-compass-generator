@@ -66,8 +66,11 @@ export function RevealView({
   const r = data.reveal!
   const showToast = useUiStore((s) => s.showToast)
   const desktop = useIsDesktop()
+  // Masaüstü: alan (başlığın altı) ve üst satır ölçülür; kalan yükseklik sütunlara gider,
+  // blok (üst satır + sütunlar) alanda dikeyde ortalanır.
   const [areaRef, area] = useElementSize<HTMLDivElement>()
-  const edge = boardEdge(area.width, area.height)
+  const [topRef, topRow] = useElementSize<HTMLDivElement>()
+  const edge = boardEdge(area.width, area.height - topRow.height - BLOCK_GAP)
   const players = useMemo(() => new Map(data.players.map((p) => [p.id, p])), [data.players])
   const isAdmin = data.me.isAdmin
   const shown = r.step === 'shown'
@@ -343,38 +346,38 @@ export function RevealView({
       width={desktop ? 'wide' : 'narrow'}
     >
       {desktop ? (
-        <>
-          <div className="flex shrink-0 items-center gap-4" data-reveal-top>
-            <div className="shrink-0" style={{ width: r.total * 28 + (r.total - 1) * 4 }}>
-              <RevealProgress opened={r.opened} total={r.total} position={r.position} players={players} />
-            </div>
-            {guessing && (
-              <div className="min-w-0 flex-1">
-                <ScoreStrip scores={r.scores} players={players} meId={data.me.id} fresh={fresh} />
+        <div ref={areaRef} className="flex min-h-0 flex-1 flex-col">
+          <div data-room-block className="my-auto flex flex-col gap-3">
+            <div ref={topRef} className="flex shrink-0 items-center gap-4" data-reveal-top>
+              <div className="shrink-0" style={{ width: r.total * 28 + (r.total - 1) * 4 }}>
+                <RevealProgress opened={r.opened} total={r.total} position={r.position} players={players} />
               </div>
-            )}
-          </div>
-          <div ref={areaRef} className="min-h-0 flex-1">
-            <div
-              className="grid gap-6"
-              style={{
-                height: edge || undefined,
-                gridTemplateColumns: `minmax(0, ${LEFT_FR}fr) minmax(0, ${RIGHT_FR}fr)`,
-              }}
-            >
-              {/* Sol sütun boy kabı: fotoğraf/yer tutucu boyu sütun yüksekliğine göre (cqh). */}
-              <div data-reveal-left className="flex min-h-0 flex-col gap-3 [container-type:size]">
-                {card}
-                <div className="shrink-0 rounded-2xl border-[3px] border-ink bg-surface p-3 shadow-brutal">{actions}</div>
-              </div>
-              <section aria-label="Pusula" className="flex min-h-0 justify-center">
-                <div data-reveal-board style={{ width: edge, height: edge }}>
-                  {board}
+              {guessing && (
+                <div className="min-w-0 flex-1">
+                  <ScoreStrip scores={r.scores} players={players} meId={data.me.id} fresh={fresh} />
                 </div>
-              </section>
+              )}
             </div>
+              <div
+                className="grid gap-6"
+                style={{
+                  height: edge || undefined,
+                  gridTemplateColumns: `minmax(0, ${LEFT_FR}fr) minmax(0, ${RIGHT_FR}fr)`,
+                }}
+              >
+                {/* Sol sütun boy kabı: fotoğraf/yer tutucu boyu sütun yüksekliğine göre (cqh). */}
+                <div data-reveal-left className="flex min-h-0 flex-col gap-3 [container-type:size]">
+                  {card}
+                  <div className="shrink-0 rounded-2xl border-[3px] border-ink bg-surface p-3 shadow-brutal">{actions}</div>
+                </div>
+                <section aria-label="Pusula" className="flex min-h-0 justify-center">
+                  <div data-reveal-board style={{ width: edge, height: edge }}>
+                    {board}
+                  </div>
+                </section>
+              </div>
           </div>
-        </>
+        </div>
       ) : (
         <>
           {top}
@@ -428,6 +431,9 @@ export function RevealView({
     </RoomFrame>
   )
 }
+
+/** Masaüstü bloğunda üst satır ile sütunlar arası (px); gap-3 ile aynı. */
+const BLOCK_GAP = 12
 
 /** Masaüstü kart başlığı: fotoğraf ve yer tutucusu aynı kutu, ad ve "Bu kim?" aynı satır. */
 const DESK_PHOTO =
